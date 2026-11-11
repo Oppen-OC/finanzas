@@ -1,0 +1,50 @@
+# What-if scenarios for the Escenarios page and `finanzas project` (D31).
+# Demo numbers, matching the synthetic ledger from demo/make_exports.py.
+#
+# The baseline outflow of every month is the burn rate (12 month median of
+# spend, D19). Income is 0 unless an event says otherwise. Every amount is in
+# euros and signed: negative means money leaving.
+#
+#   recurring:  {label: ..., monthly_eur: -450, from: 2026-11, until: 2027-06}
+#               from/until are inclusive and optional (open at either end)
+#               replaces: <category id> takes that category, children included,
+#               out of the baseline while the event is active, so new rent is
+#               not added on top of the housing the burn already contains
+#   one-off:    {label: ..., eur: -1200, month: 2026-10}
+#
+# The projection starts where the ledger ends, not today. The rest of that
+# month is prorated baseline with no events; full months follow. An event that
+# ended before the first full month is listed as skipped.
+
+horizon_months: 18
+min_balance_eur: 3000        # the floor: the page reports when each scenario drops below it
+
+scenarios:
+  # Control: the current salary and nothing else changes.
+  - id: base
+    name: "Sin cambios"
+    events:
+      - {label: Nómina, monthly_eur: 2150}
+
+  - id: piso-grande
+    name: "Piso más grande"
+    events:
+      - {label: Nómina, monthly_eur: 2150}
+      - {label: Alquiler nuevo, monthly_eur: -1050, from: 2027-01, replaces: vivienda-alquiler}
+      - {label: Fianza, eur: -2100, month: 2027-01}
+
+  - id: coche
+    name: "Coche en marzo"
+    events:
+      - {label: Nómina, monthly_eur: 2150}
+      - {label: Coche, eur: -9500, month: 2027-03}
+      - {label: Seguro, monthly_eur: -45, from: 2027-03}
+
+  # A six month gap in income, then back at the same salary. Its "necesitas"
+  # figure is the net monthly income that stops the decline.
+  - id: sabatico
+    name: "Sabático de 6 meses"
+    events:
+      - {label: Nómina, monthly_eur: 2150, until: 2027-01}
+      - {label: Nómina, monthly_eur: 2150, from: 2027-08}
+      - {label: Viaje, eur: -3000, month: 2027-03}

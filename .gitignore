@@ -1,0 +1,9 @@
+# Bank exports and the database hold personal financial data: never commit them.
+data/
+.venv/
+__pycache__/
+*.pyc
+# The desktop app drops files it sends to the chat here. They are screenshots and
+# exports, not source, and one of them walked into a commit via `git add -A`.
+Claude outputs/
+.pytest_cache/

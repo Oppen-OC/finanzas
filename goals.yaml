@@ -1,0 +1,24 @@
+# Limits you set for yourself, and the settings the metrics read. Edited through
+# `finanzas goals` or the Objetivos page; kept in a file rather than in the
+# database because the database is rebuilt from the inbox and a limit stored
+# there would not survive it (see D15, the same argument for manual.yaml).
+#
+# `since` is the month a limit starts applying. The limit in force for a month
+# is the latest entry starting at or before it, so changing a limit today does
+# not rewrite the verdict on last month. A null monthly_eur lifts the limit from
+# that month on.
+settings:
+  liquid_eur: null
+limits:
+- category: compras
+  monthly_eur: 100
+  since: 2025-09
+- category: ocio
+  monthly_eur: 60
+  since: 2025-09
+- category: salidas
+  monthly_eur: 150
+  since: 2025-09
+- category: supermercado
+  monthly_eur: 300
+  since: 2025-09

@@ -1,0 +1,23 @@
+services:
+  finanzas:
+    build: .
+    container_name: finanzas
+    ports:
+      # The one line in this file that has to be right. 127.0.0.1 publishes the
+      # port to this machine only. Plain "8000:8000" binds 0.0.0.0, which would
+      # put an unauthenticated ledger (C3) on every network this laptop joins,
+      # firewall rules on the host notwithstanding.
+      - "127.0.0.1:8000:8000"
+    volumes:
+      # The repo itself, not a named volume for data/. Two reasons, in order:
+      # the container and `python -m finanzas ...` must read the same
+      # data/finanzas.db, or the same command answers differently depending on
+      # how it was started; and rules.yaml, categories.yaml and manual.yaml are
+      # edited constantly, so they cannot live behind a rebuild.
+      #
+      # The cost, worth knowing before blaming the app: on Windows this is a
+      # bind mount across the WSL2 boundary, where SQLite locking is slower and
+      # less reliable than on a native filesystem. Single user and single writer
+      # means it should not bite, but if the UI ever reports a locked database
+      # while the CLI is running, this is why.
+      - .:/app

@@ -1,0 +1,6 @@
+# Categories set by hand, keyed by the transaction's natural key so they
+# survive deleting and rebuilding the database. `categorize` applies these
+# first; rules never overwrite them. Edit through `categorize --set`:
+#
+#   uv run python -m finanzas categorize --set <id> <category> --note "what it was"
+[]

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}finanzas{% endblock %}</title>
+  <!-- SVG only, no .ico: every browser this runs in takes SVG, and the explicit
+       link also stops the default request for /favicon.ico (a 404 per page). -->
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=1">
+  <link rel="stylesheet" href="/static/app.css">
+  <!-- Chart.js is vendored, not loaded from a CDN: constraint 1 says the tool
+       runs entirely on this machine, and a script tag pointing at jsdelivr means
+       the dashboard breaks on a plane and phones out every time it is opened. -->
+  <script src="/static/chart.umd.js"></script>
+  <script src="/static/htmx.min.js" defer></script>
+</head>
+<body>
+  <div class="wrap{% if page in ('panel', 'anual', 'escenarios', 'revisiones') %} wide{% endif %}">
+    <nav class="nav">
+      <span class="brand">finanzas</span>
+      <a href="/"{% if page == 'panel' %} class="on"{% endif %}>Panel</a>
+      <a href="/anual"{% if page == 'anual' %} class="on"{% endif %}>Anual</a>
+      <a href="/movimientos"{% if page == 'movimientos' %} class="on"{% endif %}>Movimientos</a>
+      <a href="/escenarios"{% if page == 'escenarios' %} class="on"{% endif %}>Escenarios</a>
+      <a href="/revisiones"{% if page == 'revisiones' %} class="on"{% endif %}>Revisiones</a>
+      <a href="/objetivos"{% if page == 'objetivos' %} class="on"{% endif %}>Objetivos</a>
+      <a href="/importar"{% if page == 'importar' %} class="on"{% endif %}>Importar</a>
+    </nav>
+    {% block body %}{% endblock %}
+  </div>
+</body>
+</html>

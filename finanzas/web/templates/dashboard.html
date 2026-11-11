@@ -1,0 +1,377 @@
+{% extends "base.html" %}
+{% block title %}Panel{% if month %} · {{ month }}{% endif %}{% endblock %}
+
+{% block body %}
+{% if not months %}
+  <header class="top"><h1>finanzas</h1></header>
+  <p class="empty">El libro está vacío. Deja los extractos en <code>data/inbox/</code> y ejecuta
+  <code>python -m finanzas update</code>.</p>
+{% else %}
+
+{# months is newest first, so "previous" is the next index down the list. #}
+{% set i = months.index(month) %}
+{% set prev_m = months[i + 1] if i + 1 < months|length else none %}
+{% set next_m = months[i - 1] if i > 0 else none %}
+
+<header class="top">
+  <div class="title">
+    <h1>Panel · {{ month }}</h1>
+    <p class="cover">{{ coverage[0] }} .. {{ coverage[1] }} · {{ complete_months|length }} mes(es)
+      completo(s) · {{ summary.n_transactions }} movimientos</p>
+  </div>
+  <div class="head-tools">
+    {# The warnings are chips rather than full-width banners: they are read once
+       per month and then only glanced at, and two banners pushed every figure
+       on the page 120px down. The full sentence is one click away and is in the
+       HTML either way, so nothing is hidden from a search or a screen reader. #}
+    {% if not summary.complete %}
+    <details class="info chip">
+      <summary><span aria-hidden="true">▲</span> Mes parcial</summary>
+      <div class="pop"><b>Aviso · mes parcial.</b> {{ month }} no está cubierto de punta a punta:
+        los cargos posteriores al último extracto todavía no están. Es un mes incompleto, no un
+        mes barato.</div>
+    </details>
+    {% endif %}
+    {% if summary.low_confidence %}
+    <details class="info chip">
+      <summary><span aria-hidden="true">▲</span> Confianza baja</summary>
+      <div class="pop"><b>Aviso · confianza baja.</b> Las medianas descansan sobre
+        {{ summary.baseline_months|length }} mes(es) completo(s), menos de
+        {{ min_baseline_months }}. Direccionales como mucho.</div>
+    </details>
+    {% endif %}
+    <form method="get" class="monthpick">
+      {% if prev_m %}<a class="step" href="/?month={{ prev_m }}" aria-label="Mes anterior">‹</a>{% else %}<span class="step off">‹</span>{% endif %}
+      <label class="sr" for="month">Mes</label>
+      <select id="month" name="month" onchange="this.form.submit()">
+        {% for m in months %}<option value="{{ m }}"{% if m == month %} selected{% endif %}>{{ m }}</option>{% endfor %}
+      </select>
+      {% if next_m %}<a class="step" href="/?month={{ next_m }}" aria-label="Mes siguiente">›</a>{% else %}<span class="step off">›</span>{% endif %}
+      <noscript><button type="submit">Ver</button></noscript>
+    </form>
+  </div>
+</header>
+
+<div class="kpis">
+  <div class="tile">
+    <div class="label">Gasto</div>
+    <div class="value">{{ summary.spend_cents | eur }}</div>
+    {# The fixed/variable split lives in the tile it splits. It used to be a
+       section of its own, a whole screen away from the number it decomposes. #}
+    {% if split.total_cents %}
+    <div class="split mini" title="Fijo contra variable"
+      ><div class="fixed" style="width: {{ (100 * split.fixed_cents / split.total_cents) | round(1) }}%"></div><div
+        class="variable" style="width: {{ (100 * split.variable_cents / split.total_cents) | round(1) }}%"></div></div>
+    {% endif %}
+    <div class="sub"><span class="k-fixed">fijo {{ split.fixed_cents | eur }}</span> ·
+      variable {{ split.variable_cents | eur }}</div>
+  </div>
+  <div class="tile">
+    <div class="label">Ingresos</div>
+    <div class="value">{{ summary.income_cents | eur }}</div>
+    <div class="sub">{{ month }}</div>
+  </div>
+  <div class="tile">
+    <div class="label">Neto</div>
+    <div class="value {{ 'pos' if summary.net_cents >= 0 else 'neg' }}">{{ summary.net_cents | eur }}</div>
+    <div class="sub">ingresos menos gasto</div>
+  </div>
+  <div class="tile">
+    <div class="label">Tasa de ahorro</div>
+    <div class="value">{{ saving.rate | pct }}</div>
+    <div class="sub">{% if saving.rate is none %}sin ingresos este mes{% else %}rolling
+      {{ saving.rolling_months|length }}m {{ saving.rolling_rate | pct }}{% endif %}</div>
+  </div>
+  <div class="tile">
+    <div class="label">Discrecional</div>
+    <div class="value">{{ disc.share | pct }}</div>
+    <div class="sub">{{ disc.discretionary_cents | eur }} de {{ disc.spend_cents | eur }}</div>
+  </div>
+  <div class="tile accent">
+    <div class="label">Runway</div>
+    <div class="value">{% if run.months is none %}n/a{% else %}{{ "%.1f"|format(run.months) }}<small> meses</small>{% endif %}</div>
+    <div class="sub">{% if run.burn_cents is none %}sin meses completos todavía ·
+      {{ run.liquid_cents | eur }} líquido{% else %}{{ run.liquid_cents | eur }} líquido /
+      {{ run.burn_cents | eur }} al mes{% endif %}</div>
+  </div>
+</div>
+
+<div class="bento">
+
+  <section class="panel span-8">
+    <div class="panel-head">
+      <h2>Gasto mensual</h2>
+      <details class="info">
+        <summary aria-label="Qué se dibuja">?</summary>
+        <div class="pop">Solo meses completos ({{ trend_chart.labels|length }}). Un mes parcial
+          dibujado como un punto bajo es justo la mentira que la cobertura existe para evitar
+          (D16). Pulsa un punto para abrir ese mes.</div>
+      </details>
+      {% if trend_chart.labels %}
+      <span class="legend-inline meta">
+        <span class="k-line">Gasto</span>
+        {% if trend_chart.median is not none %}<span class="k-dash">Mediana {{ trend_chart.labels|length }}m</span>{% endif %}
+      </span>
+      {% endif %}
+    </div>
+    {% if trend_chart.labels %}
+    <div class="chart"><canvas id="trend"></canvas></div>
+    {% else %}
+    <p class="dim">Ningún mes está cubierto de punta a punta todavía, así que no hay nada
+      honesto que dibujar. Importa un extracto que cierre un mes entero.</p>
+    {% endif %}
+  </section>
+
+  <section class="panel span-4 o-first">
+    <div class="panel-head">
+      <h2>Ritmo del mes</h2>
+      <details class="info">
+        <summary aria-label="Cómo se calcula">?</summary>
+        <div class="pop">{{ pace.days_elapsed }} de {{ pace.days_in_month }} día(s), a
+          {{ pace.as_of }}: el final del libro, no hoy. Los días sin extracto son datos que
+          faltan, no días de contención, y proyectar sobre ellos diría que todo va bien.
+          Una categoría fija no se proyecta, porque el recibo cae entero un día del mes.</div>
+      </details>
+      <span class="meta">día {{ pace.days_elapsed }}/{{ pace.days_in_month }}</span>
+    </div>
+    {% if pace.lines %}
+    <ul class="pace">
+      {% for line in pace.lines %}
+      {% set spent_w = [100, (100 * line.share) | round(1)] | min %}
+      {% set proj_w = [[100, (100 * line.projected_share) | round(1)] | min - spent_w, 0] | max %}
+      <li>
+        <div class="row">
+          <a class="drill" href="/movimientos?month={{ month }}&category={{ line.category }}"
+             >{{ line.name }}</a>{% if line.fixed %} <span class="tag">fijo</span>{% endif %}
+          <span class="fig">{{ line.spent_cents | eur }} <span class="dim">/ {{ line.limit_cents | eur }}</span></span>
+        </div>
+        <!-- The state is in the word as well as the colour: the bar alone
+             would say nothing in greyscale or to a colour-blind reader. -->
+        <div class="meter{% if line.over %} over{% elif line.over_projected %} nearing{% endif %}"
+          ><div class="spent" style="width: {{ spent_w }}%"></div><div
+            class="rest" style="width: {{ proj_w }}%"></div></div>
+        <div class="row small dim">
+          <span class="{% if line.over %}st-over{% elif line.over_projected %}st-near{% endif %}">{% if line.over %}se ha pasado
+            {% elif line.over_projected %}va camino de pasarse
+            {% else %}dentro{% endif %} · {{ "%.0f"|format(100 * line.projected_share) }}%</span>
+          <span class="fig">fin de mes {{ line.projected_cents | eur }}{% if not line.projected %}
+            <span class="tag">sin proyectar</span>{% endif %}</span>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    <div class="panel-foot">
+      <span>Total con límite <b class="fig">{{ pace.spent_cents | eur }}</b> / {{ pace.limit_cents | eur }}</span>
+      <span class="dim">fin {{ pace.projected_cents | eur }} · {{ pace.n_over }} de {{ pace.lines | length }} por encima</span>
+    </div>
+    {% else %}
+    <p class="dim">Sin límites todavía. Ponlos en <a class="drill" href="/objetivos">Objetivos</a>
+      y aquí verás cuánto llevas y dónde acaba el mes si sigues así.</p>
+    {% endif %}
+  </section>
+
+  <section class="panel span-8">
+    <div class="panel-head">
+      <h2>Gasto por categoría</h2>
+      <details class="info">
+        <summary aria-label="Cómo leerlo">?</summary>
+        <div class="pop">La barra es el importe del mes; la marca vertical, la mediana sobre
+          {% if summary.baseline_months %}{{ summary.baseline_months|join(', ') }}{% else %}ningún
+          mes (sin base de comparación){% endif %}. Un importe negativo es una categoría que
+          recibió más devoluciones de lo que gastó (D13). Una categoría nueva no tiene desviación:
+          «infinitamente por encima» no dice nada.</div>
+      </details>
+      <span class="legend-inline meta"><span class="k-bar">{{ month }}</span><span class="k-tick">mediana</span></span>
+    </div>
+    {# One list where there used to be a bar chart and a table showing the same
+       categories in the same order. The bar and the median tick share one scale.
+
+       The scale is set by everything except the single largest amount, and that
+       one bar is drawn clipped with a break mark when it is more than twice the
+       rest. Without this the motorbike month draws one full bar and twenty-one
+       slivers, and the list stops being readable exactly when it matters. The
+       figure beside the bar is always the real one; only the ink is capped. #}
+    {% set sc = namespace(top=0, rest=1) %}
+    {% for line in summary.by_category %}
+      {% if line.amount_cents > sc.top %}{% set sc.top = line.amount_cents %}{% endif %}
+    {% endfor %}
+    {% set sc2 = namespace(dropped=false) %}
+    {% for line in summary.by_category %}
+      {% if line.amount_cents == sc.top and not sc2.dropped %}{% set sc2.dropped = true %}
+      {% elif line.amount_cents > sc.rest %}{% set sc.rest = line.amount_cents %}{% endif %}
+      {% if line.median_cents is not none and line.median_cents > sc.rest %}{% set sc.rest = line.median_cents %}{% endif %}
+    {% endfor %}
+    {% set scale = namespace(max=sc.rest if sc.top > 2 * sc.rest else [sc.top, sc.rest] | max) %}
+    {% macro catrow(line) %}
+      <li>
+        <span class="name"><a class="drill" href="/movimientos?month={{ month }}&category={{ line.category or uncategorized }}"
+           >{{ line.name }}</a>{% if line.parent %} <span class="dim">· {{ line.parent }}</span>{% endif %}</span>
+        <span class="track">
+          {% set w = (100 * line.amount_cents / scale.max) | round(1) %}
+          <span class="fill{% if w > 100 %} clipped{% endif %}" style="width: {{ [0, [100, w] | min] | max }}%"></span>
+          {% if line.median_cents is not none %}<span class="tick" style="left: {{ [0, [100, (100 * line.median_cents / scale.max) | round(1)] | min] | max }}%"></span>{% endif %}
+        </span>
+        <span class="fig">{{ line.amount_cents | eur }}</span>
+        <span class="fig dim med">{% if line.median_cents is none %}-{% else %}{{ line.median_cents | eur }}{% endif %}</span>
+        <span class="fig dev{% if line.deviation_pct is not none %}{% if line.deviation_pct >= 25 %} up{% elif line.deviation_pct <= -25 %} down{% endif %}{% endif %}"
+          >{% if line.deviation_pct is none %}<span class="dim">-</span>{% else %}{{ line.deviation_pct | signed_pct }}{% endif %}</span>
+      </li>
+    {% endmacro %}
+    {% set top_n = 14 %}
+    <div class="cats-head"><span>Categoría</span><span></span><span>Importe</span><span class="med">Mediana</span><span>Desv.</span></div>
+    <ul class="cats">
+      {% for line in summary.by_category[:top_n] %}{{ catrow(line) }}{% endfor %}
+    </ul>
+    {% if summary.by_category|length > top_n %}
+    <details class="more">
+      <summary>{{ summary.by_category|length - top_n }} categorías más</summary>
+      <ul class="cats">
+        {% for line in summary.by_category[top_n:] %}{{ catrow(line) }}{% endfor %}
+      </ul>
+    </details>
+    {% endif %}
+  </section>
+
+  <div class="stack span-4">
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Gastos fijos</h2>
+        <details class="info">
+          <summary aria-label="Qué cuenta como fijo">?</summary>
+          <div class="pop">Fijo es una categoría marcada <code>fixed</code> en
+            <code>categories.yaml</code> o un comercio que el detector sigue viendo vivo (D18).
+            La prueba es una sola por movimiento, así que fijo y variable suman el gasto por
+            construcción.</div>
+        </details>
+        <span class="meta">{{ split.fixed_cents | eur }}{% if split.total_cents %} ·
+          {{ (split.fixed_cents / split.total_cents) | pct }}{% endif %}</span>
+      </div>
+      {% if split.fixed_items %}
+      <ul class="rows">
+        {% for desc, amount in split.fixed_items %}
+        <li><span class="desc" title="{{ desc }}">{{ desc }}</span><span class="fig">{{ amount | eur }}</span></li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="dim">{% if split.total_cents %}Ningún cargo fijo en {{ month }}.{% else %}Sin gasto en {{ month }}.{% endif %}</p>
+      {% endif %}
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Recurrentes</h2>
+        <details class="info">
+          <summary aria-label="Cómo se detectan">?</summary>
+          <div class="pop">Una serie necesita tres cargos con cadencia estable, así que una
+            suscripción no aparece hasta su tercer mes. Las grises llevan tiempo sin cargo:
+            baja probable.</div>
+        </details>
+        <span class="meta">{{ n_live }} viva(s) · {{ live_annual_cents | eur }}/año</span>
+      </div>
+      {% if recurring %}
+      <ul class="rows two">
+        {% for r in recurring %}
+        <li{% if not r.active %} class="stale"{% endif %}>
+          <div>
+            <span class="desc" title="{{ r.description_norm }}">{{ r.description_norm }}</span>
+            <span class="small dim">{{ r.last_seen }}{% if not r.active %} · baja probable{% endif %} ·
+              {{ r.category or '-' }} · {{ r.cadence }} · {{ r.occurrences }}x cada
+              {{ "%.0f"|format(r.median_gap_days) }}d</span>
+          </div>
+          <div class="right">
+            <span class="fig">{{ r.amount_cents | eur }}</span>
+            <span class="small dim fig">{{ r.annual_cents | eur }}/año</span>
+          </div>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="dim">Ninguna todavía.</p>
+      {% endif %}
+    </section>
+  </div>
+
+</div>
+
+<script>
+const css = getComputedStyle(document.documentElement);
+const tok = name => css.getPropertyValue(name).trim();
+const money = new Intl.NumberFormat("es-ES", {style: "currency", currency: "EUR"});
+// Axis ticks drop the cents: "1.500 €" reads at a glance, "1.500,00 €" is noise
+// repeated on every gridline. Tooltips keep them.
+const moneyShort = new Intl.NumberFormat("es-ES", {style: "currency", currency: "EUR", maximumFractionDigits: 0});
+
+// The charts read the same tokens as the page, so a palette change happens in
+// app.css and nowhere else.
+Chart.defaults.font.family = tok("--font-mono");
+Chart.defaults.font.size = 11;
+Chart.defaults.color = tok("--muted");
+Chart.defaults.borderColor = tok("--grid");
+Chart.defaults.plugins.tooltip.backgroundColor = tok("--surface-2");
+Chart.defaults.plugins.tooltip.titleColor = tok("--ink");
+Chart.defaults.plugins.tooltip.bodyColor = tok("--ink-2");
+Chart.defaults.plugins.tooltip.borderColor = tok("--border-2");
+Chart.defaults.plugins.tooltip.borderWidth = 1;
+Chart.defaults.plugins.tooltip.padding = 10;
+Chart.defaults.plugins.tooltip.displayColors = false;
+Chart.defaults.plugins.tooltip.titleFont = {family: tok("--font-mono"), size: 11, weight: "600"};
+Chart.defaults.plugins.tooltip.bodyFont = {family: tok("--font-mono"), size: 12};
+
+const tr = {{ trend_chart | tojson }};
+const selected = {{ month | tojson }};
+if (tr.labels.length) {
+const isSel = tr.labels.map(l => l === selected);
+const datasets = [{
+  label: "Gasto del mes", data: tr.values,
+  borderColor: tok("--series-1"),
+  // The month on screen is the filled, larger point: the chart doubles as the
+  // month picker, and it should say where you are before you pick.
+  pointBackgroundColor: isSel.map(s => s ? tok("--series-1") : tok("--surface")),
+  pointRadius: isSel.map(s => s ? 5.5 : 3),
+  borderWidth: 2, pointHoverRadius: 6, pointBorderWidth: 2,
+  pointBorderColor: tok("--series-1"), pointHoverBackgroundColor: tok("--series-1"),
+  tension: 0.25, fill: true,
+  backgroundColor: ctx => {
+    const {ctx: c, chartArea: a} = ctx.chart;
+    if (!a) return "transparent";
+    const g = c.createLinearGradient(0, a.top, 0, a.bottom);
+    g.addColorStop(0, tok("--accent-soft"));
+    g.addColorStop(1, "transparent");
+    return g;
+  },
+}];
+if (tr.median !== null) {
+  datasets.push({
+    label: "Mediana (" + tr.values.length + " meses)",
+    data: tr.labels.map(() => tr.median),
+    borderColor: tok("--muted"), borderWidth: 1.5, borderDash: [5, 4],
+    pointRadius: 0, pointHoverRadius: 0, fill: false,
+  });
+}
+new Chart(document.getElementById("trend"), {
+  type: "line",
+  data: {labels: tr.labels, datasets: datasets},
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    interaction: {mode: "index", intersect: false},
+    onClick: (e, els) => {
+      if (els.length) location.search = "?month=" + tr.labels[els[0].index];
+    },
+    onHover: (e, els) => { e.native.target.style.cursor = els.length ? "pointer" : "default"; },
+    plugins: {
+      legend: {display: false},   // drawn in the panel head, next to the title
+      tooltip: {callbacks: {label: c => c.dataset.label + ": " + money.format(c.parsed.y)}},
+    },
+    scales: {
+      x: {grid: {display: false}, border: {color: tok("--baseline")},
+          ticks: {color: c => tr.labels[c.index] === selected ? tok("--ink") : tok("--muted")}},
+      y: {beginAtZero: true, border: {display: false},
+          grid: {color: tok("--grid")},
+          ticks: {callback: v => moneyShort.format(v), maxTicksLimit: 6}},
+    },
+  },
+});
+}
+</script>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,13 @@
+# The app rewrites manual.yaml through `categorize --set`, on Windows, which
+# turns the file CRLF and makes it show as 47 changed lines with no content
+# change. Normalize the data files git tracks so a real edit is visible.
+*.yaml text eol=lf
+*.py   text eol=lf
+*.md   text eol=lf
+
+# The web UI. The vendored Chart.js build is third party and byte-for-byte as
+# published: never touch its line endings, or the file stops matching upstream.
+*.html text eol=lf
+*.css  text eol=lf
+finanzas/web/static/chart.umd.js -text
+finanzas/web/static/htmx.min.js  -text

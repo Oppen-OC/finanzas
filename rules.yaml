@@ -1,0 +1,177 @@
+# Ordered. First match wins; order is the only precedence mechanism there is.
+#
+# match is a regex searched (not anchored) against description_norm: lowercase,
+# accent-free, single-spaced. Optional narrowing: account, sign ('+' or '-'),
+# amount_min / amount_max in euros against the absolute amount.
+#
+# Prefer a specific merchant pattern over a broad one, and put the specific rule
+# above the broad one it would otherwise be swallowed by. `finanzas rules` names
+# every rule that matches nothing and every rule fully shadowed by an earlier one.
+#
+# These rules cover the synthetic ledger from demo/make_exports.py. In real use
+# this file is written by Claude Code, one reviewed diff per monthly round
+# (see .claude/commands/finanzas.md), and the app only ever applies it.
+
+# --- Movements between your own accounts ----------------------------------------
+# Money moving Santander -> BBVA is neither spend nor income: both legs are yours.
+# Both legs need a rule, or `check` reports a leg standing alone. Narrowed by account
+# and sign because the two banks word the same movement differently.
+- id: internos-salida-santander
+  match: "^transferencia inmediata a favor de cuenta propia"
+  account: santander
+  sign: "-"
+  category: internos-cuentas
+
+- id: internos-entrada-bbva
+  match: "^transferencia recibida / gastos mes"
+  account: bbva
+  sign: "+"
+  category: internos-cuentas
+
+# Out to the broker. Also not spending, but unlike the pair above it has only one leg
+# in the ledger, and it is money saved rather than money parked, so it stays visible
+# as its own category instead of disappearing.
+- id: internos-inversion
+  match: "^transferencia realizada / inversion"
+  account: bbva
+  sign: "-"
+  category: internos-inversion
+
+# --- Income -----------------------------------------------------------------------
+# The extra pay months use the same payer and land in the same category.
+- id: ingresos-nomina
+  match: "^transferencia de acme soluciones"
+  sign: "+"
+  category: ingresos-nomina
+
+# Not a negative expense: the withholding it refunds never reached the ledger, because
+# the salary arrives net of it (D20).
+- id: ingresos-irpf
+  match: "agencia tributaria.*devolucion"
+  sign: "+"
+  category: ingresos-irpf
+
+# --- Bizum ------------------------------------------------------------------------
+# Bizum is a payment method, not a purpose (D12): a dinner is `salidas` whether it
+# was paid by card or owed to a friend. No `sign`: a friend's share coming back lands
+# in the same category, so the total is the net cost (D13).
+- id: bizum-salidas
+  match: "^bizum / (enviado|recibido): .*(cena|pizza|comida)"
+  category: salidas-planes
+
+- id: bizum-gasolina
+  match: "^bizum / (enviado|recibido): .*gasolina"
+  category: transporte-combustible
+
+# Catch-all. Everything below this line never sees a Bizum.
+- id: bizum-sin-clasificar
+  match: "^bizum / "
+  category: misc-bizum
+
+# --- Housing ----------------------------------------------------------------------
+- id: vivienda-alquiler
+  match: "inmobiliaria turia .*alquiler"
+  account: santander
+  category: vivienda-alquiler
+
+- id: vivienda-luz
+  match: "^recibo iberdrola"
+  category: vivienda-suministros
+
+- id: vivienda-agua
+  match: "^recibo emivasa"
+  category: vivienda-suministros
+
+# --- Subscriptions ----------------------------------------------------------------
+- id: suscripciones-digi
+  match: "^recibo digi spain"
+  category: suscripciones-telefonia
+
+- id: suscripciones-streaming
+  match: "^(netflix|spotify)\\b"
+  category: suscripciones-streaming
+
+- id: suscripciones-claude
+  match: "^claude\\.ai"
+  category: suscripciones-software
+
+# --- Health -----------------------------------------------------------------------
+- id: salud-gimnasio
+  match: "\\bbasic-?fit\\b"
+  category: salud-gimnasio
+
+- id: salud-farmacia
+  match: "\\bfarmacia\\b"
+  category: salud-farmacia
+
+- id: salud-peluqueria
+  match: "^peluqueria"
+  category: salud-cuidado
+
+# --- Everyday ---------------------------------------------------------------------
+# One regex per chain, not per branch: Mercadona arrives under many store names.
+- id: supermercado
+  match: "^(mercadona|lidl|consum)\\b"
+  category: supermercado
+
+- id: salidas-cafes
+  match: "^(horno el trigal|cafe mercat)\\b"
+  category: salidas-cafes
+
+- id: salidas-restaurantes
+  match: "^(rest\\. la barraca|pizzeria napoli|sushi kami|bar el cabanyal)\\b"
+  category: salidas-restaurantes
+
+- id: salidas-fiesta
+  match: "^fever\\b"
+  category: salidas-fiesta
+
+- id: ocio-cine
+  match: "^cines lys\\b"
+  category: ocio-cultura
+
+- id: ocio-steam
+  match: "^steam\\b"
+  category: ocio-videojuegos
+
+# --- Transport --------------------------------------------------------------------
+- id: transporte-combustible
+  match: "\\brepsol\\b"
+  category: transporte-combustible
+
+- id: transporte-publico
+  match: "^(metrovalencia|renfe|valenbisi)\\b"
+  category: transporte-publico
+
+- id: transporte-moto
+  match: "mapfre seguros moto"
+  category: transporte-moto
+
+# --- Shopping ---------------------------------------------------------------------
+# Above compras-general: a laptop would otherwise sit in Compras varias all year.
+- id: compras-tecnologia
+  match: "^pccomponentes\\b"
+  category: compras-tecnologia
+
+- id: compras-ropa
+  match: "^(zara|decathlon)\\b"
+  category: compras-ropa
+
+- id: compras-segunda-mano
+  match: "^wallapop\\b"
+  category: compras-segunda-mano
+
+# Only ever seen in December in this ledger, for presents.
+- id: compras-regalos
+  match: "^el corte ingles\\b"
+  category: compras-regalos
+
+- id: compras-amazon
+  match: "^amazon\\b"
+  category: compras-general
+
+# --- Cash -------------------------------------------------------------------------
+- id: efectivo
+  match: "retirada de efectivo"
+  sign: "-"
+  category: efectivo

@@ -1,0 +1,14 @@
+# Stable account names, resolved from the last 4 digits an export reveals about itself.
+#
+# Santander files carry the IBAN, BBVA files only carry card numbers. When a card is
+# replaced, the import stops with "unknown identifiers" instead of silently creating a
+# new account: add the new card's last 4 to the list and re-run.
+#
+# Last 4 digits only. Never put a full card or IBAN here (constraint 6).
+# These are the demo accounts from demo/make_exports.py; replace them with yours.
+santander:
+  bank: santander
+  ids: ["0001"]   # IBAN
+bbva:
+  bank: bbva
+  ids: ["0002"]   # debit card

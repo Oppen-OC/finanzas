@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+{% block title %}Escenarios{% endblock %}
+
+{% block body %}
+{% if error %}
+  <header class="top"><h1>Escenarios</h1></header>
+  <p class="warn"><b>{{ path }} no es válido.</b> {{ error }}</p>
+  <p class="dim">Corrige el fichero y recarga. Nada se ha calculado con él.</p>
+{% elif res is none %}
+  <header class="top"><h1>Escenarios</h1></header>
+  <div class="empty-help">
+    <p>No hay <code>{{ path }}</code> todavía. Créalo en la raíz del repositorio, al lado de
+      <code>goals.yaml</code>, con algo así (importes en euros, negativo es dinero que sale):</p>
+    <pre class="snippet">horizon_months: 18
+min_balance_eur: 1500
+scenarios:
+  - id: mudanza
+    name: "Mudanza en enero"
+    events:
+      - {label: Alquiler nuevo, monthly_eur: -800, from: 2027-01, replaces: vivienda}
+      - {label: Nómina, monthly_eur: 2200}
+      - {label: Fianza, eur: -1600, month: 2027-01}</pre>
+    <p class="dim">Luego <code>python -m finanzas project</code> o recarga esta página.</p>
+  </div>
+{% elif res.start is none %}
+  <header class="top"><h1>Escenarios</h1></header>
+  <p class="empty">No hay desde dónde proyectar: hace falta al menos un mes completo en el libro
+    para tener un ritmo de gasto.</p>
+{% else %}
+{% set st = res.start %}
+
+<header class="top">
+  <div class="title">
+    <h1>Escenarios · desde {{ st.as_of }}</h1>
+    <p class="cover">{{ st.liquid_cents | eur }} líquido ({{ {'override': 'forzado', 'goals.yaml': 'goals.yaml', 'accounts': 'suma de cuentas'}[st.liquid_source] }})
+      · gasto base {{ st.burn_cents | eur }}/mes ({{ st.burn_months|length }} meses)
+      · suelo {{ res.floor_cents | eur }} · {{ res.horizon_months }} meses</p>
+  </div>
+  <div class="head-tools">
+    {% if st.low_confidence %}
+    <details class="info chip">
+      <summary><span aria-hidden="true">▲</span> Confianza baja</summary>
+      <div class="pop"><b>Aviso · confianza baja.</b> El gasto base descansa sobre
+        {{ st.burn_months|length }} mes(es) completo(s), menos de {{ min_baseline_months }}.
+        Todas las líneas heredan esa incertidumbre.</div>
+    </details>
+    {% endif %}
+  </div>
+</header>
+
+<div class="bento">
+  <section class="panel span-8">
+    <div class="panel-head">
+      <h2>Saldo proyectado</h2>
+      <details class="info">
+        <summary aria-label="Cómo se calcula">?</summary>
+        <div class="pop">Aritmética sobre los eventos de <code>{{ path }}</code>, no una
+          predicción. Cada mes sale el gasto base (la mediana de 12 meses, D19) más los eventos
+          activos; los ingresos solo entran como eventos. Un evento con <code>replaces</code>
+          quita esa categoría del gasto base mientras dura. Todas las líneas arrancan del saldo
+          a {{ st.as_of }}, el final del libro, no hoy.
+          {% if st.stub_month %}{{ st.stub_month }}* es solo el resto del mes
+          ({{ st.stub_days_left }} de {{ st.stub_days_in_month }} días) a ritmo base, sin
+          eventos: el libro ya puede contener la nómina o el alquiler de ese mes.{% endif %}</div>
+      </details>
+      <span class="legend-inline meta"><span class="k-dash">Suelo {{ res.floor_cents | eur_whole }} €</span></span>
+    </div>
+    <div class="chart"><canvas id="proj"></canvas></div>
+  </section>
+
+  <section class="panel span-4">
+    <div class="panel-head"><h2>Resumen</h2></div>
+    <ul class="scen">
+      {% for sc in res.scenarios %}
+      <li{% if sc.id == sel.id %} class="on"{% endif %}>
+        <a class="scen-name" href="/escenarios?s={{ sc.id }}#mensual"><span class="sw s{{ loop.index0 % 5 + 1 }}" aria-hidden="true"></span>{{ sc.name }}</a>
+        <dl>
+          <dt>Bajo el suelo</dt><dd class="fig{% if sc.floor_month %} st-near{% endif %}">{{ sc.floor_month or "no en el horizonte" }}</dd>
+          <dt>Sin saldo</dt><dd class="fig{% if sc.zero_month %} st-over{% endif %}">{{ sc.zero_month or "no en el horizonte" }}</dd>
+          <dt title="Ingreso neto mensual que para la caída cuando solo quedan los eventos sin fin">Necesitas</dt><dd class="fig">{{ sc.required_income_cents | eur }}/mes</dd>
+          <dt title="Lo anterior menos los ingresos sin fin del escenario. Negativo es superávit">{{ "Te falta" if sc.gap_cents > 0 else "Te sobra" }}</dt><dd class="fig {{ 'neg' if sc.gap_cents > 0 else 'pos' }}">{{ (sc.gap_cents if sc.gap_cents > 0 else -sc.gap_cents) | eur }}/mes</dd>
+          <dt>Saldo final</dt><dd class="fig{% if sc.final_cents < 0 %} neg{% endif %}">{{ sc.final_cents | eur }}</dd>
+        </dl>
+      </li>
+      {% endfor %}
+    </ul>
+    <p class="panel-foot small">«Necesitas» es el ingreso neto al mes que para la caída cuando
+      solo quedan los eventos sin fecha de fin. En un escenario sin nómina, es la nómina neta de
+      equilibrio.</p>
+  </section>
+
+  <section class="panel span-12" id="mensual">
+    <div class="panel-head">
+      <h2>Mes a mes · {{ sel.name }}</h2>
+      <form method="get" class="monthpick" action="/escenarios#mensual">
+        <label class="sr" for="s">Escenario</label>
+        <select id="s" name="s" onchange="this.form.submit()">
+          {% for sc in res.scenarios %}<option value="{{ sc.id }}"{% if sc.id == sel.id %} selected{% endif %}>{{ sc.name }}</option>{% endfor %}
+        </select>
+        <noscript><button type="submit">Ver</button></noscript>
+      </form>
+    </div>
+    <div class="scroll-x">
+    <table class="proj">
+      <thead><tr><th>Mes</th><th class="num opt">Apertura</th><th class="num">Ingresos</th>
+        <th class="num">Gastos</th><th class="num">Cierre</th><th class="opt">Eventos</th></tr></thead>
+      <tbody>
+      {% for r in sel.rows %}
+        {% set below = r.closing_cents < 0 %}
+        {% set under = r.closing_cents < res.floor_cents %}
+        <tr{% if r.partial %} class="dim"{% endif %}>
+          <td class="nowrap fig">{{ r.month }}{% if r.partial %}*{% endif %}</td>
+          <td class="num opt">{{ r.opening_cents | eur }}</td>
+          <td class="num">{{ r.income_cents | eur }}</td>
+          <td class="num" title="gasto base {{ r.base_cents | eur }}">{{ r.outflow_cents | eur }}</td>
+          <td class="num nowrap{% if below %} st-over{% elif under %} st-near{% endif %}">{{ r.closing_cents | eur }}{% if below %} <span class="tag">&lt; 0</span>{% elif under %} <span class="tag">&lt; suelo</span>{% endif %}</td>
+          <td class="concept small opt">{% if r.partial %}resto del mes ({{ r.days }} días), sin eventos{% endif %}
+            {%- for e in r.events %}{{ ", " if not loop.first }}{{ e.label }} <span class="fig">{{ "+" if e.cents > 0 }}{{ e.cents | eur }}</span>{% endfor %}
+            {%- if r.replaced %} <span class="dim">· base sin {{ r.replaced | join(", ") }}: {{ r.base_cents | eur }}</span>{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% if sel.skipped %}
+    <ul class="skipped small dim">
+      {% for k in sel.skipped %}
+      <li>No proyectado: {{ k.label }} ({{ k.month }}), {{ "terminó antes del primer mes proyectado, así que ya está en el libro o no ocurrió" if k.why == "past" else "empieza después del horizonte" }}.</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </section>
+</div>
+
+<script>
+const css = getComputedStyle(document.documentElement);
+const tok = name => css.getPropertyValue(name).trim();
+const money = new Intl.NumberFormat("es-ES", {style: "currency", currency: "EUR"});
+const moneyShort = new Intl.NumberFormat("es-ES", {style: "currency", currency: "EUR", maximumFractionDigits: 0});
+Chart.defaults.font.family = tok("--font-mono");
+Chart.defaults.font.size = 11;
+Chart.defaults.color = tok("--muted");
+Chart.defaults.borderColor = tok("--grid");
+Chart.defaults.plugins.tooltip.backgroundColor = tok("--surface-2");
+Chart.defaults.plugins.tooltip.titleColor = tok("--ink");
+Chart.defaults.plugins.tooltip.bodyColor = tok("--ink-2");
+Chart.defaults.plugins.tooltip.borderColor = tok("--border-2");
+Chart.defaults.plugins.tooltip.borderWidth = 1;
+Chart.defaults.plugins.tooltip.padding = 10;
+
+const ch = {{ chart | tojson }};
+const selected = {{ sel.id | tojson }};
+// Colour is not the only channel (app.css rule 1): each line also has its own
+// point shape, and the legend names it.
+const shapes = ["circle", "rect", "triangle", "rectRot", "crossRot"];
+const datasets = ch.series.map((s, i) => {
+  const c = tok("--series-" + (i % 5 + 1));
+  const on = s.id === selected;
+  return {
+    label: s.name, data: s.values, borderColor: c, backgroundColor: c,
+    borderWidth: on ? 2.5 : 1.5, pointStyle: shapes[i % 5],
+    pointRadius: on ? 3.5 : 2.5, pointHoverRadius: 5, tension: 0, fill: false,
+  };
+});
+datasets.push({
+  label: "Suelo", data: ch.labels.map(() => ch.floor),
+  borderColor: tok("--muted"), borderWidth: 1.5, borderDash: [5, 4],
+  pointRadius: 0, pointHoverRadius: 0, fill: false,
+});
+new Chart(document.getElementById("proj"), {
+  type: "line",
+  data: {labels: ch.labels, datasets: datasets},
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    interaction: {mode: "index", intersect: false},
+    // The tooltip reads every line at a month; a click opens the line under the
+    // pointer, so it asks for the nearest point rather than the index.
+    onClick: (e, _, chart) => {
+      const hit = chart.getElementsAtEventForMode(e, "nearest", {intersect: true}, false);
+      const i = hit.length ? hit[0].datasetIndex : -1;
+      if (i >= 0 && i < ch.series.length) location.href = "/escenarios?s=" + ch.series[i].id + "#mensual";
+    },
+    plugins: {
+      legend: {position: "bottom", labels: {usePointStyle: true, boxWidth: 8, boxHeight: 8,
+               filter: item => item.text !== "Suelo"}},
+      tooltip: {callbacks: {label: c => c.dataset.label + ": " + money.format(c.parsed.y)}},
+    },
+    scales: {
+      x: {grid: {display: false}, border: {color: tok("--baseline")},
+          ticks: {autoSkip: true, maxRotation: 0}},
+      // Zero gets a stronger gridline: it is the one level that means "no money".
+      y: {border: {display: false},
+          grid: {color: c => c.tick.value === 0 ? tok("--baseline") : tok("--grid"),
+                 lineWidth: c => c.tick.value === 0 ? 1.5 : 1},
+          ticks: {callback: v => moneyShort.format(v), maxTicksLimit: 7}},
+    },
+  },
+});
+</script>
+{% endif %}
+{% endblock %}

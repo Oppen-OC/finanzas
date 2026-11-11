@@ -1,0 +1,138 @@
+# Taxonomy. Generated from three months of real data, pruned by hand, then frozen:
+# a tree that keeps moving makes month over month comparison meaningless. Adding a
+# category later is fine; renaming or resplitting one rewrites history.
+#
+# Fields: id (stable, referenced by rules.yaml and never reused), name (display),
+# parent (a top level id, or absent), type.
+#
+# type, on top level categories only, children inherit it:
+#   expense   counts as spending
+#   income    counts as income
+#   internal  movements between your own accounts, or out to your own investment
+#             account. Excluded from every spend and income metric: both sides are
+#             your money, and counting them would double count.
+#
+# Sign is not part of the taxonomy. A refund, or a Bizum a friend sends back for
+# their share of a dinner, lands in the same category as the expense with a positive
+# amount, so the category total is the net cost. Metrics therefore sum amounts per
+# category; they never filter by sign.
+
+- id: supermercado
+  name: Supermercado
+  type: expense
+
+# Split by kind of cost, not by address: an address stops appearing when you move,
+# a kind of cost does not.
+#
+# fixed: rent, the comunidad and the utility direct debits are monthly commitments
+# by definition, the same reason suscripciones carries the flag.
+- id: vivienda
+  name: Vivienda
+  type: expense
+  fixed: true
+- {id: vivienda-alquiler,    name: Alquiler, parent: vivienda}
+- {id: vivienda-suministros, name: "Agua, luz e internet", parent: vivienda}
+- {id: vivienda-comunidad,   name: Comunidad, parent: vivienda}
+
+# discretionary: could stop tomorrow without changing how you live. Read by the
+# discretionary-share metric, inherited by every child.
+- id: salidas
+  name: Salidas
+  type: expense
+  discretionary: true
+- {id: salidas-restaurantes, name: Restaurantes, parent: salidas}
+- {id: salidas-cafes,        name: Cafés y panaderías, parent: salidas}
+- {id: salidas-fiesta,       name: Fiesta y eventos, parent: salidas}
+- {id: salidas-planes,       name: Planes compartidos, parent: salidas}
+
+- id: ocio
+  name: Ocio
+  type: expense
+  discretionary: true
+- {id: ocio-videojuegos, name: Videojuegos, parent: ocio}
+- {id: ocio-cultura,     name: Cine y cultura, parent: ocio}
+
+- id: transporte
+  name: Transporte
+  type: expense
+- {id: transporte-moto,        name: Moto, parent: transporte}
+- {id: transporte-combustible, name: Combustible, parent: transporte}
+- {id: transporte-publico,     name: Transporte público y parking, parent: transporte}
+
+- id: salud
+  name: Salud y cuidado
+  type: expense
+# fixed: a monthly commitment. A gym changed every few months means no single
+# charge repeats often enough to be detected as recurring, but the cost is there
+# every month regardless.
+- {id: salud-gimnasio, name: Gimnasio y deporte, parent: salud, fixed: true}
+- {id: salud-farmacia, name: Farmacia y médico, parent: salud}
+- {id: salud-cuidado,  name: Cuidado personal, parent: salud}
+
+# fixed: subscriptions are commitments by definition, whether or not three
+# occurrences have accumulated for the detector to find them.
+- id: suscripciones
+  name: Suscripciones
+  type: expense
+  fixed: true
+- {id: suscripciones-software,  name: Software e IA, parent: suscripciones}
+- {id: suscripciones-telefonia, name: Telefonía e internet, parent: suscripciones}
+- {id: suscripciones-streaming, name: Streaming, parent: suscripciones}
+
+- id: compras
+  name: Compras
+  type: expense
+- {id: compras-ropa,         name: Ropa y calzado, parent: compras}
+- {id: compras-segunda-mano, name: Segunda mano, parent: compras}
+- {id: compras-hogar,        name: Hogar y muebles, parent: compras}
+- {id: compras-regalos,      name: Regalos, parent: compras}
+# Phones, computers, peripherals. Its own bucket because one purchase that size
+# would dominate Compras varias for the whole year and hide what it normally costs.
+- {id: compras-tecnologia,   name: Tecnología, parent: compras}
+- {id: compras-general,      name: Compras varias, parent: compras}
+
+- id: educacion
+  name: Educación
+  type: expense
+
+- id: impuestos
+  name: Impuestos y comisiones
+  type: expense
+
+# opaque: what the cash was spent on is invisible to the ledger (read by `review`).
+- id: efectivo
+  name: Efectivo retirado
+  type: expense
+  opaque: true
+
+# Not a kind of spending: the bucket for movements a rule matched but could not
+# place, above all Bizums whose concept line says nothing ("sin concepto"). Distinct
+# from an uncategorized transaction, which has no category at all and is still on the
+# work list. Anything here is spending of unknown purpose, so it stays type expense.
+- id: misc
+  name: Sin clasificar
+  type: expense
+  opaque: true
+# Bizums whose concept line says nothing usable. Kept apart from the rest of misc
+# because they are a known, bounded problem worth watching. If this line grows past
+# ~10% of spending it earns a real taxonomy.
+- {id: misc-bizum, name: Bizum sin clasificar, parent: misc}
+
+- id: ingresos
+  name: Ingresos
+  type: income
+- {id: ingresos-nomina,    name: Nómina, parent: ingresos}
+- {id: ingresos-desempleo, name: Prestación por desempleo, parent: ingresos}
+- {id: ingresos-finiquito, name: Finiquito e indemnización, parent: ingresos}
+- {id: ingresos-familia,   name: Familia, parent: ingresos}
+- {id: ingresos-otros,     name: Cashback y otros, parent: ingresos}
+# The annual IRPF settlement. Its own category rather than ingresos-otros because
+# it arrives once a year in three figures, and averaged into a cashback bucket it
+# would wreck that category's median for twelve months.
+- {id: ingresos-irpf,      name: Devolución de la renta, parent: ingresos}
+
+- id: internos
+  name: Movimientos internos
+  type: internal
+- {id: internos-cuentas,   name: Entre mis cuentas, parent: internos}
+- {id: internos-inversion, name: A inversión, parent: internos}

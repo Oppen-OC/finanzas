@@ -1,0 +1,10 @@
+# The build context is uploaded to the daemon, so this is not only about speed:
+# data/ holds the bank exports and the ledger, and they have no business being
+# copied anywhere. The build needs pyproject.toml and uv.lock, nothing else.
+.git/
+.venv/
+data/
+__pycache__/
+*.pyc
+.pytest_cache/
+Claude outputs/

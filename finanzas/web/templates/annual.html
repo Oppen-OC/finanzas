@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}Anual{% if m.end_month %} · {{ m.end_month }}{% endif %}{% endblock %}
+
+{% block body %}
+{% if not m.months %}
+  <header class="top"><h1>Anual</h1></header>
+  <p class="empty">Ningún mes está cubierto de punta a punta todavía, así que no hay año que
+  enseñar. La matriz aparece con el primer mes completo.</p>
+{% else %}
+
+{# ends is newest first, so "previous" is the next index down the list. #}
+{% set i = ends.index(m.end_month) %}
+{% set prev_e = ends[i + 1] if i + 1 < ends|length else none %}
+{% set next_e = ends[i - 1] if i > 0 else none %}
+{% set n = m.months|length %}
+
+<header class="top">
+  <div class="title">
+    <h1>Anual · {{ m.months[0] }} .. {{ m.months[-1] }}</h1>
+    <p class="cover">{{ n }} mes(es) completo(s) · gasto total {{ m.grand_total_cents | eur }} ·
+      mediana mensual {{ m.totals.median_cents | eur }}</p>
+  </div>
+  <div class="head-tools">
+    {% if m.low_confidence %}
+    <details class="info chip">
+      <summary><span aria-hidden="true">▲</span> Confianza baja</summary>
+      <div class="pop"><b>Aviso · confianza baja.</b> La ventana tiene {{ n }} mes(es) completo(s),
+        menos de {{ min_baseline_months }}. La mediana de cada fila, y el color que depende de
+        ella, no dicen nada todavía.</div>
+    </details>
+    {% endif %}
+    <form method="get" class="monthpick">
+      {% if prev_e %}<a class="step" href="/anual?end={{ prev_e }}" aria-label="Ventana anterior">‹</a>{% else %}<span class="step off">‹</span>{% endif %}
+      <label class="sr" for="end">Último mes</label>
+      <select id="end" name="end" onchange="this.form.submit()">
+        {% for e in ends %}<option value="{{ e }}"{% if e == m.end_month %} selected{% endif %}>hasta {{ e }}</option>{% endfor %}
+      </select>
+      {% if next_e %}<a class="step" href="/anual?end={{ next_e }}" aria-label="Ventana siguiente">›</a>{% else %}<span class="step off">›</span>{% endif %}
+      <noscript><button type="submit">Ver</button></noscript>
+    </form>
+  </div>
+</header>
+
+{# A cell is a link when it has money in it; an empty month is a dot, since a link
+   to an empty list of movements is a click that answers nothing. The colour comes
+   from the deviation annual_matrix computed, through the heat filter; the figure
+   is always printed, so the colour is emphasis and never the only channel. #}
+{% macro cells(row, link, heat=true) %}
+  {% for c in row.cells %}
+    {% if c.cents %}
+    <a class="mx-cell fig {{ c.deviation | heat if heat }}"
+       href="/movimientos?month={{ c.month }}{% if link %}&category={{ link }}{% endif %}"
+       title="{{ c.month }} · {{ c.cents | eur }} · mediana {{ row.median_cents | eur }}"
+       >{{ c.cents | eur_whole }}</a>
+    {% else %}
+    <span class="mx-cell zero" title="{{ c.month }} · sin movimientos">·</span>
+    {% endif %}
+  {% endfor %}
+  <span class="mx-cell fig mx-total">{{ row.total_cents | eur }}</span>
+  <span class="mx-cell fig dim">{{ row.median_cents | eur_whole }}</span>
+  <span class="mx-cell fig mx-n{% if row.months_with_spend <= 2 %} rare{% endif %}"
+    >{{ row.months_with_spend }}<span class="dim">/{{ n }}</span></span>
+{% endmacro %}
+
+<section class="panel">
+  <div class="panel-head">
+    <h2>Gasto por categoría y mes</h2>
+    <details class="info">
+      <summary aria-label="Cómo leerlo">?</summary>
+      <div class="pop">Cada fila se colorea contra su propia mediana, no contra las demás: en
+        escala absoluta las dos o tres categorías grandes apagarían todo lo demás. La desviación
+        es (mes − mediana) / la mediana, con un suelo de {{ floor_cents | eur_whole }} € para que
+        6 € sobre una categoría de 3 € no se pinten como una moto. Los meses sin gasto cuentan
+        como 0, así que un cargo anual tiene mediana 0 y su mes sale como pico. Un importe
+        negativo es un mes con más devoluciones que gasto (D13). <b>Meses</b> es cuántos meses
+        tuvieron importe: {{ n }}/{{ n }} es un hábito, 1/{{ n }} un cargo puntual. Pulsa una
+        categoría con ▸ para ver sus subcategorías; pulsa una cifra para ver sus movimientos.</div>
+    </details>
+    <span class="legend-inline meta mx-legend" aria-hidden="true">
+      <span class="sw hd3"></span><span class="sw hd1"></span>por debajo · por encima<span
+        class="sw hu1"></span><span class="sw hu3"></span>
+    </span>
+  </div>
+
+  <div class="mx-scroll">
+    <div class="mx" style="--n: {{ n }}">
+      <div class="mx-row mx-head">
+        <span class="mx-name">Categoría</span>
+        {% for mo in m.months %}<span class="mx-cell fig" title="{{ mo }}">{{ mo[5:] }}<span class="yy">/{{ mo[2:4] }}</span></span>{% endfor %}
+        <span class="mx-cell">Total</span>
+        <span class="mx-cell">Mediana</span>
+        <span class="mx-cell" title="Meses con importe distinto de cero">Meses</span>
+      </div>
+
+      {% for row in m.rows %}
+        {% if row.children %}
+        <details class="mx-group">
+          <summary class="mx-row">
+            <span class="mx-name"><span class="caret" aria-hidden="true">▸</span>{{ row.name }}</span>
+            {{ cells(row, row.id) }}
+          </summary>
+          {% for c in row.children %}
+          <div class="mx-row mx-child">
+            <span class="mx-name{% if c.direct %} direct{% endif %}"
+              {% if c.direct %}title="Movimientos asignados a {{ row.name }} sin subcategoría. El enlace muestra toda la categoría."{% endif %}
+              >{{ c.name }}</span>
+            {{ cells(c, c.id) }}
+          </div>
+          {% endfor %}
+        </details>
+        {% else %}
+        <div class="mx-row">
+          <span class="mx-name{% if row.id == uncategorized %} dim{% endif %}">{{ row.name }}</span>
+          {{ cells(row, row.id) }}
+        </div>
+        {% endif %}
+      {% endfor %}
+
+      <div class="mx-row mx-foot">
+        <span class="mx-name">Gasto total</span>
+        {{ cells(m.totals, none, false) }}
+      </div>
+      {# Income sits below the spend total and is not coloured: income is often an
+         event, not a habit, and a red severance month would read as a problem. #}
+      <div class="mx-row mx-income">
+        <span class="mx-name">Ingresos</span>
+        {{ cells(m.income, m.income.id, false) }}
+      </div>
+    </div>
+  </div>
+</section>
+{% endif %}
+{% endblock %}

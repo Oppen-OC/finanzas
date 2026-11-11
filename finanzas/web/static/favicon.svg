@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Accent green from app.css (--accent). Three rising bars: the tool's job
+       in one glyph, and legible at 16px where a euro sign turns to mush. -->
+  <rect width="32" height="32" rx="7" fill="#0f8a74"/>
+  <rect x="7" y="17" width="4.5" height="8" rx="1" fill="#fff"/>
+  <rect x="13.75" y="12" width="4.5" height="13" rx="1" fill="#fff"/>
+  <rect x="20.5" y="7" width="4.5" height="18" rx="1" fill="#fff"/>
+</svg>

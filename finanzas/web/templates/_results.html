@@ -1,0 +1,34 @@
+<div id="resultados">
+  <p class="cover">
+    {{ rows|length }} movimiento(s) · neto {{ net_cents | eur }} EUR
+    {%- if truncated %} · <b>cortado en {{ max_rows }}</b>: afina el filtro para verlos todos{% endif %}
+  </p>
+  <div class="card">
+    {% if rows %}
+    <table>
+      <thead><tr>
+        <th class="num">id</th><th>Fecha</th><th>Cuenta</th>
+        <th class="num">Importe</th><th>Categoría</th><th>Concepto</th>
+      </tr></thead>
+      <tbody>
+      {% for r in rows %}
+        <tr>
+          <!-- The id is here so it can be pasted straight into
+               `categorize --set`: this table is where a wrong category is spotted,
+               and the fix is a rule or a manual.yaml entry, never an edit here. -->
+          <td class="num dim">{{ r["id"] }}</td>
+          <td class="nowrap">{{ r["date"] }}</td>
+          <td>{{ r["account"] }}</td>
+          <td class="num {{ 'pos' if r["amount_cents"] > 0 }}">{{ r["amount_cents"] | eur }}</td>
+          <td class="nowrap">{% if r["category"] %}{{ categories[r["category"]].name }}{% else %}<span class="dim">sin categorizar</span>{% endif %}
+            {%- if r["category_src"] == "manual" %} <span class="tag" title="fijada a mano en manual.yaml">manual</span>{% endif %}</td>
+          <td class="concept">{{ r["description"] }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="dim">Ningún movimiento con esos filtros.</p>
+    {% endif %}
+  </div>
+</div>

@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Movimientos{% endblock %}
+
+{% block body %}
+<header class="top"><h1>Movimientos</h1></header>
+
+<!-- action and method are not decoration: with JS off the form still submits and
+     the same route returns the whole page. HTMX only removes the reload.
+     The trigger listens for `input` rather than `keyup`: a paste, an autofill or
+     the browser's own clear-search button changes the field without ever
+     producing a keystroke. Comments stay outside the start tag: one placed
+     between attributes is parsed as an attribute and eats the rest of them. -->
+<form class="filters" action="/movimientos" method="get"
+      hx-get="/movimientos" hx-target="#resultados" hx-swap="outerHTML"
+      hx-trigger="submit, change, input changed delay:300ms from:#q"
+      hx-push-url="true">
+  <label>Mes
+    <select name="month">
+      <option value="">todos</option>
+      {% for m in months %}<option value="{{ m }}"{% if m == f.month %} selected{% endif %}>{{ m }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Cuenta
+    <select name="account">
+      <option value="">todas</option>
+      {% for a in accounts %}<option value="{{ a }}"{% if a == f.account %} selected{% endif %}>{{ a }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Categoría
+    <select name="category">
+      <option value="">todas</option>
+      <option value="{{ uncategorized }}"{% if f.category == uncategorized %} selected{% endif %}>Sin categorizar</option>
+      {% for parent, kids in category_options %}
+      <optgroup label="{{ parent.name }}">
+        <option value="{{ parent.id }}"{% if f.category == parent.id %} selected{% endif %}>Todo: {{ parent.name }}</option>
+        {% for k in kids %}<option value="{{ k.id }}"{% if f.category == k.id %} selected{% endif %}>&nbsp;&nbsp;{{ k.name }}</option>{% endfor %}
+      </optgroup>
+      {% endfor %}
+    </select>
+  </label>
+  <label class="grow">Buscar
+    <input id="q" type="search" name="q" value="{{ f.q }}" placeholder="bizum, mercadona, ...">
+  </label>
+  <button type="submit">Filtrar</button>
+  <a class="reset" href="/movimientos">Limpiar</a>
+</form>
+
+{% include "_results.html" %}
+{% endblock %}

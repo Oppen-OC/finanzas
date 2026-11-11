@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+{% block title %}Revisiones{% if month %} · {{ month }}{% endif %}{% endblock %}
+
+{% block body %}
+{% if not reviews %}
+  <header class="top"><h1>Revisiones</h1></header>
+  <p class="empty">Todavía no hay ningún mes completo. La primera nota aparece cuando el libro
+  cubre un mes de punta a punta.</p>
+{% else %}
+
+{# months is newest first, so "previous" is the next index down the list. #}
+{% set i = months.index(month) %}
+{% set prev_m = months[i + 1] if i + 1 < months|length else none %}
+{% set next_m = months[i - 1] if i > 0 else none %}
+{% set names = {"spend": "Gasto frente a tu mediana", "limits": "Límites cumplidos",
+                "discretionary": "Gasto discrecional", "runway": "Colchón a fin de mes"} %}
+
+<header class="top">
+  <div class="title">
+    <h1>Revisión · {{ month }}</h1>
+    <p class="cover">La nota la calcula <code>finanzas review</code>, siempre igual para el mismo
+      mes. El texto lo escribe <code>/asesor</code> en <code>reviews/{{ month }}.md</code>.</p>
+  </div>
+  <div class="head-tools">
+    {% if r.low_confidence %}
+    <details class="info chip">
+      <summary><span aria-hidden="true">▲</span> Confianza baja</summary>
+      <div class="pop"><b>Aviso · confianza baja.</b> {{ r.opaque_cents | eur }}, el
+        {{ r.opaque_share | pct(0) }} del gasto, fue a efectivo, sin clasificar o sin categoría
+        (el umbral es {{ opaque_warn | pct(0) }}). La nota juzga la parte del mes que se ve.</div>
+    </details>
+    {% endif %}
+    <form method="get" class="monthpick">
+      {% if prev_m %}<a class="step" href="/revisiones?month={{ prev_m }}" aria-label="Mes anterior">‹</a>{% else %}<span class="step off">‹</span>{% endif %}
+      <label class="sr" for="month">Mes</label>
+      <select id="month" name="month" onchange="this.form.submit()">
+        {% for m in months %}<option value="{{ m }}"{% if m == month %} selected{% endif %}>{{ m }}</option>{% endfor %}
+      </select>
+      {% if next_m %}<a class="step" href="/revisiones?month={{ next_m }}" aria-label="Mes siguiente">›</a>{% else %}<span class="step off">›</span>{% endif %}
+      <noscript><button type="submit">Ver</button></noscript>
+    </form>
+  </div>
+</header>
+
+<div class="bento">
+  <section class="panel span-4">
+    <div class="panel-head"><h2>Nota por mes</h2><span class="meta">sobre 10</span></div>
+    {# One bar per complete month. A month without a score says why in its tooltip
+       rather than drawing an empty bar that reads as a zero. #}
+    <ul class="scores">
+      {% for x in reviews %}
+      <li{% if x.month == month %} class="on"{% endif %}>
+        <a class="drill" href="/revisiones?month={{ x.month }}">{{ x.month }}</a>
+        {% if x.score is not none %}
+        <div class="track"><div class="fill{% if x.score < 4 %} low{% elif x.score < 6 %} mid{% endif %}"
+             style="width: {{ 10 * x.score }}%"></div></div>
+        <span class="fig">{{ "%.1f"|format(x.score) }}</span>
+        {% else %}
+        <span class="dim small" title="{{ x.blocked | join('; ') }}">sin nota</span><span></span>
+        {% endif %}
+        <span class="marks">{% if x.low_confidence %}<span class="tag" title="confianza baja">▲</span>{% endif %}{% if has_text[x.month] %}<span class="tag" title="revisión escrita">txt</span>{% endif %}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+
+  <section class="panel span-8">
+    <div class="panel-head"><h2>Nota de {{ month }}</h2>
+      {% if r.baseline_months %}<span class="meta">mediana sobre {{ r.baseline_months|length }} mes(es)</span>{% endif %}</div>
+    {% if r.score is none %}
+      <div class="banner"><span aria-hidden="true">▲</span><div>
+        <b>Este mes no tiene nota.</b> {{ r.blocked | join('; ') }}.
+      </div></div>
+    {% else %}
+      <div class="bigscore"><span class="fig">{{ "%.1f"|format(r.score) }}</span><span class="dim">/10</span></div>
+      <ul class="components">
+        {% for key, c in r.components.items() %}
+        <li>
+          <div class="row"><span>{{ names[key] }}</span>
+            <span class="fig">{{ "%.1f"|format(c.points) }} <span class="dim small">× {{ c.weight | pct(0) }}</span></span></div>
+          <div class="track"><div class="fill" style="width: {{ 10 * c.points }}%"></div></div>
+          <div class="small dim">
+            {% if key == "spend" %}{{ r.spend_cents | eur }} frente a una mediana de {{ c.baseline_cents | eur }} (×{{ "%.2f"|format(c.value) }})
+            {% elif key == "discretionary" %}{{ c.spent_cents | eur }} frente a una mediana de {{ c.baseline_cents | eur }} (×{{ "%.2f"|format(c.value) }})
+            {% elif key == "limits" %}{{ c.lines | rejectattr("over") | list | length }} de {{ c.lines | length }} dentro del límite
+            {% elif key == "runway" %}{{ "%.1f"|format(c.value) }} meses: {{ c.liquid_cents | eur }} a fin de mes
+            {% endif %}
+          </div>
+        </li>
+        {% endfor %}
+      </ul>
+      {% set missing = ["spend", "limits", "discretionary", "runway"] | reject("in", r.components) | list %}
+      {% if missing %}<p class="small dim">Sin aplicar este mes, el resto se repondera:
+        {% for k in missing %}{{ names[k] }}{% if k == "limits" %} (no había límites en vigor){% endif %}{% if not loop.last %}, {% endif %}{% endfor %}.</p>{% endif %}
+    {% endif %}
+    <div class="panel-foot">
+      <span>Gasto <span class="fig">{{ r.spend_cents | eur }}</span></span>
+      <span>Ingresos <span class="fig">{{ r.income_cents | eur }}</span> <span class="dim small">(no cuentan en la nota)</span></span>
+      <span>Opaco <span class="fig">{{ r.opaque_share | pct(0) }}</span></span>
+    </div>
+  </section>
+</div>
+
+<div class="bento">
+  <section class="panel span-4">
+    <div class="panel-head"><h2>Lo que destaca</h2></div>
+    {% if not (r.big_charges or r.deviations or r.price_changes) %}
+      <p class="dim small">Nada por encima de los umbrales este mes.</p>
+    {% endif %}
+    {% if r.big_charges %}
+    <h3 class="sub">Cargos grandes</h3>
+    <ul class="rows">
+      {% for b in r.big_charges %}
+      <li><div><span class="desc">{{ b.description }}</span>
+        <span class="small dim">{{ b.date }} · {{ b.category or "sin categoría" }} · #{{ b.id }}</span></div>
+        <div class="right"><span class="fig">{{ b.amount_cents | eur }}</span></div></li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+    {% if r.deviations %}
+    <h3 class="sub">Categorías por encima de su mediana</h3>
+    <ul class="rows">
+      {% for d in r.deviations %}
+      <li><div><a class="drill desc" href="/movimientos?month={{ month }}&amp;category={{ d.category or '' }}">{{ d.category or "sin categoría" }}</a>
+        <span class="small dim">mediana {{ d.median_cents | eur }}</span></div>
+        <div class="right"><span class="fig">{{ d.amount_cents | eur }}</span>
+          <span class="small dev up fig">+{{ d.delta_cents | eur }}</span></div></li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+    {% if r.price_changes %}
+    <h3 class="sub">Cambios de precio</h3>
+    <ul class="rows">
+      {% for p in r.price_changes %}
+      <li><div><span class="desc">{{ p.description }}</span><span class="small dim">{{ p.date }}</span></div>
+        <div class="right"><span class="fig">{{ p.amount_cents | eur }}</span>
+          <span class="small dim fig">suele ser {{ p.usual_cents | eur }}</span></div></li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </section>
+
+  <section class="panel span-8">
+    <div class="panel-head"><h2>Revisión escrita</h2>
+      {% if text %}<span class="meta">reviews/{{ month }}.md</span>{% endif %}</div>
+    {% if text and text_score is not none and text_score != r.score %}
+      <div class="banner"><span aria-hidden="true">▲</span><div>
+        <b>La revisión está desfasada.</b> El texto dice {{ "%.1f"|format(text_score) }}/10 y la nota
+        de hoy es {% if r.score is none %}ninguna{% else %}{{ "%.1f"|format(r.score) }}{% endif %}:
+        el libro ha cambiado desde que se escribió. Vuelve a ejecutar <code>/asesor {{ month }}</code>.
+      </div></div>
+    {% endif %}
+    {% if text %}
+      {# Shown as the Markdown /asesor wrote, in the monospace face the rest of the
+         page uses, rather than rendered to HTML: rendering it would be a new
+         dependency for headings and bold, and the tables line up by themselves in
+         a fixed-width font. Autoescaped like everything else. #}
+      <pre class="review-text">{{ text }}</pre>
+    {% else %}
+      <p class="dim">Todavía no hay revisión escrita para {{ month }}. En Claude Code, desde la
+        raíz del repo: <code>/asesor {{ month }}</code>.</p>
+    {% endif %}
+  </section>
+</div>
+{% endif %}
+{% endblock %}

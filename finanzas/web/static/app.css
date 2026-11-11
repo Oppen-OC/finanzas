@@ -1,0 +1,1094 @@
+/* ============================================================================
+   Design system: "Financial Terminal".
+   Near-black instrument surfaces, hairline borders, one restrained accent, and
+   every figure set in a monospace face so columns line up by construction.
+
+   Three rules this file is written to, because they are the ones that get
+   broken first:
+
+   1. Colour is never the only channel. The banners carry an icon and a word,
+      the pace meter has "dentro" / "se ha pasado" written beside it, and the
+      accent means "this is the app" rather than "this is good".
+   2. Semantic colours are text colours (--good, --critical), the accent is a
+      chrome colour. Separating the roles is what keeps teal and green from
+      being asked to mean two different things in the same row.
+   3. Nothing loads from a network. No @import, no webfont, no CDN. Constraint 1
+      and D21: this tool works on a train.
+   ============================================================================ */
+
+:root {
+  color-scheme: light;
+
+  /* Surfaces, warm rather than pure white: a ledger read for an hour at a time. */
+  --page:        #f7f7f4;
+  --surface:     #ffffff;
+  --surface-2:   #f1f1ed;   /* table heads, hover rows, inset controls */
+  --surface-3:   #e9e9e3;   /* pressed / track */
+
+  --ink:         #14161a;
+  --ink-2:       #4a5058;
+  --muted:       #858b92;
+
+  --grid:        #e5e5df;   /* chart gridlines */
+  --baseline:    #c7c7bf;   /* chart axis */
+  --border:      rgba(16, 18, 22, 0.10);
+  --border-2:    rgba(16, 18, 22, 0.18);   /* hover / focus edge */
+
+  /* One accent. Teal rather than blue or violet, and deliberately not a hue
+     that any metric uses to mean anything. */
+  --accent:      #0f8a74;
+  --accent-ink:  #0b6e5c;   /* accent text on a light surface, AA at 14px */
+  --accent-soft: rgba(15, 138, 116, 0.10);
+  --accent-edge: rgba(15, 138, 116, 0.34);
+  --series-1:    #0f8a74;   /* the charts read this name; literal, see note */
+  /* The scenario lines. Hues far apart and none of them the semantic greens and
+     reds; each line also has its own point shape, so colour is not the only channel. */
+  --series-2:    #b4620a;
+  --series-3:    #3b62c4;
+  --series-4:    #a23d8c;
+  --series-5:    #5f6670;
+
+  --good:        #056b2d;
+  --warning:     #a8720a;
+  --critical:    #bf2f2f;
+
+  --shadow-card: 0 1px 2px rgba(16, 18, 22, 0.05);
+  --shadow-lift: 0 4px 14px -4px rgba(16, 18, 22, 0.14);
+  --glow:        0 0 0 3px var(--accent-soft);
+
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* Every figure on every page is set in this. Tabular by nature, and it is the
+     single thing that makes the pages read as an instrument rather than a form. */
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", "Cascadia Mono",
+               "Segoe UI Mono", Menlo, Consolas, monospace;
+
+  --r-xs: 3px;
+  --r-sm: 5px;
+  --r:    8px;
+  --r-lg: 12px;
+
+  --gut: 16px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+
+    --page:        #08090a;
+    --surface:     #101215;
+    --surface-2:   #171a1e;
+    --surface-3:   #1e2227;
+
+    /* Not #fff: pure white on near-black smears at small sizes and makes the
+       whole page feel like it is vibrating. */
+    --ink:         #e9ebee;
+    --ink-2:       #9aa1a9;
+    --muted:       #6d757d;
+
+    --grid:        #1d2126;
+    --baseline:    #2c3239;
+    --border:      rgba(255, 255, 255, 0.075);
+    --border-2:    rgba(255, 255, 255, 0.16);
+
+    --accent:      #3fc9ad;
+    --accent-ink:  #55d7bd;
+    --accent-soft: rgba(63, 201, 173, 0.12);
+    --accent-edge: rgba(63, 201, 173, 0.40);
+    --series-1:    #3fc9ad;
+    --series-2:    #e59b45;
+    --series-3:    #7ea2f2;
+    --series-4:    #d97bc4;
+    --series-5:    #a0a7b0;
+
+    --good:        #35c46a;
+    --warning:     #e0a33a;
+    --critical:    #e35d5d;
+
+    --shadow-card: inset 0 1px 0 rgba(255, 255, 255, 0.045),
+                   0 1px 2px rgba(0, 0, 0, 0.45);
+    --shadow-lift: inset 0 1px 0 rgba(255, 255, 255, 0.07),
+                   0 8px 24px -8px rgba(0, 0, 0, 0.8);
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--ink);
+  font: 15px/1.55 var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* A single wash of accent behind the masthead, fixed so it never scrolls into
+   the tables. Two percent alpha: it should be felt and not seen, and it must
+   never end up behind a number. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: 340px;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(60% 100% at 50% 0%, var(--accent-soft), transparent 70%);
+  opacity: .8;
+}
+
+.wrap {
+  position: relative;
+  z-index: 1;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 20px var(--gut) 88px;
+}
+
+/* --- Navigation ---------------------------------------------------------- */
+
+.nav {
+  display: flex;
+  align-items: center;
+  /* Wraps rather than scrolls: at 390px the brand plus four tabs is 480px wide,
+     and a nav that does not wrap takes the whole page sideways with it. */
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 22px;
+  padding: 5px;
+  font-size: 13.5px;
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-card);
+  backdrop-filter: blur(8px);
+}
+.nav .brand {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: .04em;
+  color: var(--muted);
+  padding: 6px 10px 6px 8px;
+  margin-right: 2px;
+  border-right: 1px solid var(--border);
+  white-space: nowrap;
+}
+.nav .brand::before {
+  content: "";
+  display: inline-block;
+  width: 6px; height: 6px;
+  margin-right: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+  vertical-align: 1px;
+}
+.nav a {
+  position: relative;
+  padding: 6px 12px;
+  border-radius: var(--r-sm);
+  color: var(--ink-2);
+  text-decoration: none;
+  transition: color .14s ease, background-color .14s ease;
+}
+.nav a:hover { color: var(--ink); background: var(--surface-2); }
+.nav a.on {
+  color: var(--ink);
+  font-weight: 600;
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+/* The active tab is marked twice: weight and a rule under it. The rule is what
+   survives being glanced at, the weight is what survives greyscale. */
+.nav a.on::after {
+  content: "";
+  position: absolute;
+  left: 12px; right: 12px; bottom: 2px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+/* The wordmark is the first thing to go when the tabs need the room: it names
+   the page the user is already looking at. */
+@media (max-width: 560px) {
+  .nav { padding: 4px; }
+  .nav .brand { display: none; }
+  .nav a { padding: 6px 10px; }
+}
+
+/* --- Masthead ------------------------------------------------------------ */
+
+header.top {
+  display: flex; flex-wrap: wrap; gap: 12px;
+  align-items: center; justify-content: space-between;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+header.top h1 {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 620;
+  letter-spacing: -0.015em;
+}
+header.top form { display: flex; align-items: center; gap: 8px; margin: 0; }
+
+.cover {
+  color: var(--muted);
+  font-size: 12.5px;
+  margin: 10px 0 0;
+}
+/* A path has no spaces to break at, and one long enough would push the whole
+   page sideways on a phone. */
+.cover code, code {
+  font-family: var(--font-mono);
+  font-size: .92em;
+  overflow-wrap: anywhere;
+  padding: 1px 4px;
+  border-radius: var(--r-xs);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--ink-2);
+}
+
+/* --- Controls ------------------------------------------------------------ */
+
+select,
+input[type="text"],
+input[type="search"],
+input[type="file"] {
+  font: inherit;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 6px 9px;
+  transition: border-color .14s ease, box-shadow .14s ease, background-color .14s ease;
+}
+select:hover,
+input[type="text"]:hover,
+input[type="search"]:hover { border-color: var(--border-2); }
+
+button {
+  font: inherit;
+  font-weight: 500;
+  color: var(--ink);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 6px 14px;
+  cursor: pointer;
+  transition: border-color .14s ease, background-color .14s ease,
+              transform .08s ease, box-shadow .14s ease;
+}
+button:hover {
+  border-color: var(--accent-edge);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+button:active { transform: translateY(1px); }
+
+/* One focus treatment for everything that takes focus. :focus-visible so a
+   mouse click on a select does not light up a ring nobody asked for. */
+:where(a, button, select, input, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--r-xs);
+}
+
+/* --- Banners ------------------------------------------------------------- */
+
+/* An icon plus a word, never the colour alone: the banner has to survive a
+   greyscale print and a colour-blind reader. */
+.banner {
+  display: flex; gap: 11px; align-items: flex-start;
+  margin: 16px 0 0;
+  padding: 11px 14px;
+  font-size: 13px;
+  color: var(--ink-2);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--warning);
+  border-radius: var(--r);
+  box-shadow: var(--shadow-card);
+}
+.banner b { color: var(--ink); font-weight: 600; }
+.banner > span[aria-hidden] { color: var(--warning); line-height: 1.45; }
+/* A failed check is not a warning about confidence, it is a statement that the
+   ledger is wrong, so it gets the critical border rather than the warning one. */
+.banner.problem { border-left-color: var(--critical); }
+.banner.problem > span[aria-hidden] { color: var(--critical); }
+
+/* --- Tiles --------------------------------------------------------------- */
+
+.tiles {
+  display: grid; gap: 10px;
+  margin: 20px 0 8px;
+  grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
+}
+.tile {
+  position: relative;
+  overflow: hidden;
+  padding: 14px 16px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  box-shadow: var(--shadow-card);
+  transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+/* The hairline wipes in from the left on hover. It is the one piece of pure
+   decoration in the file and it costs nothing when it is not hovered. */
+.tile::after {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, var(--accent), transparent);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform .28s cubic-bezier(.22, 1, .36, 1);
+}
+.tile:hover {
+  border-color: var(--border-2);
+  box-shadow: var(--shadow-lift);
+  transform: translateY(-1px);
+}
+.tile:hover::after { transform: scaleX(1); }
+
+.tile .label {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.tile .value {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 27px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin-top: 6px;
+  line-height: 1.1;
+}
+.tile .sub {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ink-2);
+  margin-top: 6px;
+}
+.pos { color: var(--good); }
+.neg { color: var(--critical); }
+
+/* --- Sections and cards -------------------------------------------------- */
+
+section { margin-top: 34px; }
+section h2 {
+  margin: 0 0 5px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: .10em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+section .hint {
+  margin: 0 0 12px;
+  max-width: 76ch;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+.card {
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  box-shadow: var(--shadow-card);
+  /* The recurring table is six columns wide. On a phone it scrolls inside its
+     own card rather than pushing the whole page sideways. */
+  overflow-x: auto;
+}
+
+/* --- Tables -------------------------------------------------------------- */
+
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left; }
+th {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-bottom-color: var(--border-2);
+  white-space: nowrap;
+}
+/* Every number in the app: one face, one alignment, one set of digit widths. */
+td.num, th.num, .amount, .value {
+  text-align: right;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+tbody tr { transition: background-color .12s ease; }
+tbody tr:hover { background: var(--surface-2); }
+tbody tr:last-child td { border-bottom: none; }
+tfoot td {
+  border-top: 1px solid var(--border-2);
+  border-bottom: none;
+  font-weight: 600;
+  padding-top: 10px;
+}
+tfoot td.dim { font-weight: 400; }
+
+.stale { color: var(--muted); }
+.dim { color: var(--muted); }
+td.nowrap, th.nowrap { white-space: nowrap; }
+td.concept { color: var(--ink-2); }
+
+.tag {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: .04em;
+  padding: 1px 5px;
+  border-radius: var(--r-xs);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--muted);
+  vertical-align: 1px;
+}
+
+a.drill {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px dotted var(--baseline);
+  transition: color .12s ease, border-color .12s ease;
+}
+a.drill:hover { color: var(--accent-ink); border-bottom-color: var(--accent); }
+
+.empty { padding: 56px 0; color: var(--muted); }
+
+/* --- Fixed / variable split --------------------------------------------- */
+
+.split { display: flex; gap: 2px; margin: 8px 0 10px; }
+.split > div { height: 10px; border-radius: 2px; }
+.split .fixed { background: var(--accent); }
+.split .variable { background: var(--baseline); }
+
+.legend-inline { display: flex; flex-wrap: wrap; gap: 18px; font-size: 13px; color: var(--ink-2); }
+.legend-inline span::before {
+  content: "";
+  display: inline-block;
+  width: 9px; height: 9px;
+  border-radius: 2px;
+  margin-right: 7px;
+  vertical-align: baseline;
+}
+.legend-inline .k-fixed::before { background: var(--accent); }
+.legend-inline .k-var::before { background: var(--baseline); }
+
+/* --- Month to date pace (5.2) -------------------------------------------- */
+
+/* Two segments: what has been spent, then where the projection lands. The
+   colour is a second channel, never the only one; the row says "se ha pasado"
+   or "dentro" in words next to it.
+
+   The modifiers are .over and .nearing rather than .warn on purpose: .warn is a
+   bordered callout elsewhere on the same page, and when the meter reused that
+   name it inherited a 3px border and 10px of padding and drew every bar 10%
+   short of the number printed beside it. */
+.meter {
+  display: flex; gap: 1px;
+  width: 140px; height: 8px;
+  background: var(--surface-3);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.meter .spent, .meter .rest { background: var(--accent); }
+.meter.nearing .spent, .meter.nearing .rest { background: var(--warning); }
+.meter.over .spent, .meter.over .rest { background: var(--critical); }
+.meter .rest { opacity: .38; }
+
+/* --- Filters, upload, inline forms --------------------------------------- */
+
+.filters, .upload {
+  display: flex; flex-wrap: wrap; align-items: flex-end;
+  gap: 10px 14px;
+  margin: 18px 0 10px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  box-shadow: var(--shadow-card);
+}
+.filters label, .upload label, .addlimit label {
+  display: flex; flex-direction: column; gap: 5px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.filters label.grow { flex: 1 1 220px; }
+.upload label { flex: 1 1 320px; text-transform: none; letter-spacing: 0; font-size: 12px; }
+.filters input[type="search"] { width: 100%; background: var(--surface-2); }
+.upload input[type="file"] { background: transparent; border-color: transparent; padding-left: 0; }
+.filters .reset {
+  font-size: 13px; color: var(--muted); padding-bottom: 7px; text-decoration: none;
+  transition: color .12s ease;
+}
+.filters .reset:hover { color: var(--ink); }
+
+/* With JS on, HTMX fires on change and on typing, so the button is a fallback
+   rather than the way the page is used. It stays visible because hiding it
+   would leave a no-JS visitor with a form and nothing to press. */
+.htmx-request #resultados { opacity: .5; transition: opacity .1s; }
+
+/* One form per row on Objetivos, so a limit is edited and saved where it is
+   read and the page still works with JS off. */
+form.inline { display: flex; gap: 6px; justify-content: flex-end; margin: 0; }
+form.inline input.amount { width: 92px; padding: 4px 8px; background: var(--surface-2); }
+form.inline button, .addlimit button { padding: 5px 12px; }
+form.inline button.quiet { border-color: transparent; background: transparent; color: var(--muted); }
+form.inline button.quiet:hover { border-color: var(--critical); background: transparent; color: var(--critical); }
+
+/* The settings card holds nothing but this form, and a rule above the only
+   thing in a card is a divider dividing nothing. */
+.card > .addlimit:first-child { margin-top: 0; padding-top: 0; border-top: none; }
+.addlimit {
+  display: flex; flex-wrap: wrap; align-items: flex-end;
+  gap: 10px 14px;
+  margin-top: 16px; padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.addlimit input { width: 150px; background: var(--surface-2); }
+
+/* --- Check list (Importar) ----------------------------------------------- */
+
+ul.checks { list-style: none; margin: 0; padding: 0; font-size: 14px; }
+ul.checks li { padding: 6px 0 6px 26px; position: relative; }
+ul.checks li::before {
+  position: absolute; left: 0; top: 7px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: .04em;
+}
+ul.checks li.ok::before { content: "OK"; color: var(--good); }
+ul.checks li.bad::before { content: "!!"; color: var(--critical); font-weight: 700; }
+ul.checks .detail { color: var(--ink-2); font-size: 13px; padding: 3px 0 0 8px; }
+
+/* Kept as a callout and kept away from .meter, see the note above. */
+.warn {
+  color: var(--ink-2);
+  border-left: 3px solid var(--warning);
+  padding-left: 11px;
+}
+
+/* --- Motion -------------------------------------------------------------- */
+
+/* The whole of the animation budget: content arrives instead of appearing.
+   Guarded, off by default for anyone who has asked for less movement, and the
+   page is fully readable at frame zero in that case. */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: none; }
+  }
+  .tiles, section, .filters, .upload, header.top {
+    animation: rise .34s cubic-bezier(.22, 1, .36, 1) both;
+  }
+  section:nth-of-type(2) { animation-delay: .04s; }
+  section:nth-of-type(3) { animation-delay: .08s; }
+  section:nth-of-type(4) { animation-delay: .12s; }
+  section:nth-of-type(n+5) { animation-delay: .16s; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+
+/* --- Print --------------------------------------------------------------- */
+
+@media print {
+  body::before, .nav { display: none; }
+  .card, .tile { box-shadow: none; break-inside: avoid; }
+  .wrap { max-width: none; padding: 0; }
+}
+
+/* ============================================================================
+   Panel layout: a bento grid instead of seven stacked sections.
+
+   The old panel was one column, 4,000px tall at 1100px wide, and the bar chart
+   and the median table drew the same categories twice. The grid follows the
+   pattern most analytics dashboards settle on (Linear, Vercel, the "stats
+   bento" blocks on 21st.dev): a KPI strip, then a wide chart beside a narrow
+   status column, then the detail. The rule it is built to: the whole month
+   answers "how am I doing" above the fold, and the explanations every section
+   used to open with are one click away instead of always in the way.
+
+   Scoped to .wrap.wide, so the other three pages keep their reading width.
+   ============================================================================ */
+
+.wrap.wide { max-width: 1360px; }
+.wrap.wide .nav { margin-bottom: 16px; }
+
+.sr {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap;
+}
+
+/* --- Masthead --- */
+
+.wrap.wide header.top { padding-bottom: 12px; align-items: flex-end; }
+header.top .title .cover { margin: 3px 0 0; font-family: var(--font-mono); font-size: 11.5px; }
+.head-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+.monthpick {
+  display: flex; align-items: center; gap: 2px;
+  padding: 2px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+}
+.monthpick select {
+  border-color: transparent; background: transparent;
+  font-family: var(--font-mono); font-size: 13px; padding: 4px 6px;
+}
+.monthpick .step {
+  display: inline-grid; place-items: center;
+  width: 28px; height: 28px;
+  border-radius: var(--r-sm);
+  color: var(--ink-2); text-decoration: none; font-size: 17px; line-height: 1;
+}
+.monthpick a.step:hover { background: var(--surface-2); color: var(--ink); }
+.monthpick .step.off { color: var(--border-2); }
+
+/* --- Popover explanations ------------------------------------------------ */
+
+/* <details> rather than a JS tooltip: it opens on click and on keyboard, it
+   works with JS off, and the text stays in the page for tests and search. */
+details.info { position: relative; }
+details.info > summary {
+  list-style: none;
+  display: inline-grid; place-items: center;
+  width: 17px; height: 17px;
+  border-radius: 50%;
+  border: 1px solid var(--border-2);
+  font-family: var(--font-mono); font-size: 10px; color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+}
+details.info > summary::-webkit-details-marker { display: none; }
+details.info > summary:hover, details.info[open] > summary {
+  color: var(--accent-ink); border-color: var(--accent-edge); background: var(--accent-soft);
+}
+details.info .pop {
+  position: absolute; z-index: 20;
+  top: calc(100% + 8px); left: -8px;
+  width: min(340px, 78vw);
+  padding: 11px 13px;
+  font-size: 12.5px; line-height: 1.55; color: var(--ink-2);
+  font-family: var(--font-sans); letter-spacing: 0; text-transform: none; font-weight: 400;
+  background: var(--surface-2);
+  border: 1px solid var(--border-2);
+  border-radius: var(--r);
+  box-shadow: var(--shadow-lift);
+}
+details.info .pop b { color: var(--ink); }
+
+/* The warning chips are the same popover with a label in place of the "?". */
+details.info.chip > summary {
+  width: auto; height: 28px; padding: 0 10px; gap: 6px;
+  display: inline-flex; align-items: center;
+  border-radius: 999px;
+  border-color: color-mix(in srgb, var(--warning) 45%, transparent);
+  background: color-mix(in srgb, var(--warning) 10%, transparent);
+  color: var(--ink);
+  font-size: 11px; letter-spacing: .04em; text-transform: uppercase;
+}
+details.info.chip > summary span { color: var(--warning); }
+details.info.chip .pop { left: auto; right: 0; }
+
+/* --- KPI strip ----------------------------------------------------------- */
+
+.kpis {
+  display: grid; gap: 10px;
+  margin: 14px 0 0;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+.kpis .tile { padding: 12px 14px 13px; }
+.kpis .value { text-align: left; font-size: 24px; white-space: nowrap; }
+.kpis .value small { font-size: 12px; font-weight: 500; color: var(--muted); letter-spacing: 0; }
+.kpis .tile.accent { border-color: var(--accent-edge); background:
+  linear-gradient(180deg, var(--accent-soft), transparent 70%), var(--surface); }
+.split.mini { margin: 8px 0 0; }
+.split.mini > div { height: 4px; }
+.kpis .sub .k-fixed { color: var(--accent-ink); }
+
+/* --- Bento grid ---------------------------------------------------------- */
+
+.bento {
+  display: grid; gap: 12px;
+  margin-top: 12px;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  align-items: stretch;
+}
+.span-8 { grid-column: span 8; }
+.span-4 { grid-column: span 4; }
+.span-12 { grid-column: 1 / -1; }
+.stack { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+
+section.panel {
+  margin-top: 0;
+  display: flex; flex-direction: column;
+  min-width: 0;
+  padding: 14px 16px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-card);
+}
+.panel-head {
+  display: flex; align-items: center; gap: 8px;
+  min-height: 22px;
+  margin-bottom: 12px;
+}
+section.panel .panel-head h2 { margin: 0; }
+.panel-head .meta {
+  margin-left: auto;
+  font-family: var(--font-mono); font-size: 11.5px; color: var(--muted);
+  white-space: nowrap;
+}
+.panel-foot {
+  display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px;
+  margin-top: auto; padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 12.5px; color: var(--ink-2);
+}
+.fig { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.small { font-size: 11.5px; }
+
+.chart { position: relative; flex: 1; min-height: 250px; }
+
+.legend-inline.meta { gap: 14px; font-size: 11px; }
+.legend-inline .k-line::before { background: var(--series-1); height: 2px; width: 12px; vertical-align: middle; }
+.legend-inline .k-dash::before {
+  width: 12px; height: 0; border-top: 2px dashed var(--muted); border-radius: 0; vertical-align: middle;
+}
+.legend-inline .k-bar::before { background: var(--accent); }
+.legend-inline .k-tick::before { width: 2px; height: 11px; background: var(--ink-2); border-radius: 0; vertical-align: -1px; }
+
+/* --- Pace list ----------------------------------------------------------- */
+
+ul.pace { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 11px; }
+ul.pace .row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 13.5px; }
+ul.pace .row.small { font-size: 11.5px; margin-top: 4px; }
+ul.pace .meter { width: 100%; height: 6px; margin-top: 5px; }
+.st-over { color: var(--critical); }
+.st-near { color: var(--warning); }
+
+/* --- Category list: bar + median tick ------------------------------------ */
+
+.cats-head, ul.cats > li {
+  display: grid; align-items: center; gap: 12px;
+  grid-template-columns: minmax(0, 1.5fr) minmax(90px, 2fr) 92px 84px 56px;
+}
+.cats-head {
+  padding: 0 6px 6px;
+  border-bottom: 1px solid var(--border-2);
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: .07em;
+  text-transform: uppercase; color: var(--muted);
+}
+.cats-head > span:nth-child(n+3) { text-align: right; }
+ul.cats { list-style: none; margin: 0; padding: 0; }
+ul.cats > li {
+  padding: 5px 6px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13.5px;
+  border-radius: var(--r-xs);
+  transition: background-color .12s ease;
+}
+ul.cats > li:hover { background: var(--surface-2); }
+ul.cats > li > .fig { text-align: right; }
+ul.cats .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.track { position: relative; height: 8px; background: var(--surface-3); border-radius: 999px; }
+.track .fill { position: absolute; inset: 0 auto 0 0; background: var(--accent); border-radius: 999px; min-width: 0; }
+.track .tick {
+  position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px;
+  background: var(--ink-2); border-radius: 1px;
+}
+.dev.up { color: var(--warning); }
+.dev.down { color: var(--good); }
+
+details.more > summary {
+  list-style: none; cursor: pointer;
+  padding: 8px 6px 2px;
+  font-size: 12.5px; color: var(--muted);
+}
+details.more > summary::-webkit-details-marker { display: none; }
+details.more > summary::before { content: "+ "; font-family: var(--font-mono); }
+details.more[open] > summary::before { content: "− "; }
+details.more > summary:hover { color: var(--accent-ink); }
+
+/* --- Compact rows: fixed items, recurring -------------------------------- */
+
+ul.rows { list-style: none; margin: 0; padding: 0; }
+ul.rows > li {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+ul.rows > li:last-child { border-bottom: none; }
+ul.rows > li > div { min-width: 0; display: flex; flex-direction: column; }
+ul.rows .desc { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+ul.rows .right { align-items: flex-end; flex-shrink: 0; }
+ul.rows .small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* --- Responsive ---------------------------------------------------------- */
+
+@media (max-width: 1180px) {
+  .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 980px) {
+  .bento > * { grid-column: 1 / -1; }
+  /* On one column the pace list comes before the chart: it is the part of the
+     month that still changes what you do. */
+  .o-first { order: -1; }
+}
+@media (max-width: 560px) {
+  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kpis .value { font-size: 20px; }
+  /* The name gets the width: the parent label and the median column go, the
+     bar keeps enough length to show the tick. */
+  .cats-head, ul.cats > li { grid-template-columns: minmax(0, 1fr) 52px 78px 46px; gap: 8px; }
+  .cats-head .med, ul.cats .med, ul.cats .name .dim { display: none; }
+  .head-tools { width: 100%; }
+  .monthpick { margin-left: auto; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .kpis, .bento > * { animation: rise .34s cubic-bezier(.22, 1, .36, 1) both; }
+  .bento > :nth-child(2) { animation-delay: .04s; }
+  .bento > :nth-child(3) { animation-delay: .08s; }
+  .bento > :nth-child(4) { animation-delay: .12s; }
+}
+
+/* A bar longer than the scale: capped at the track and cut by a gap in the
+   page colour, the usual broken-axis mark, so it cannot be read as "exactly the
+   maximum". */
+.track .fill.clipped {
+  background:
+    linear-gradient(105deg, transparent calc(100% - 22px), var(--surface) calc(100% - 22px),
+                    var(--surface) calc(100% - 17px), transparent calc(100% - 17px)),
+    var(--accent);
+}
+
+/* The entry animation gives every header, tile and panel its own stacking
+   context, so an open popover was painted under the next card in the DOM. The
+   element holding an open popover is lifted above its siblings. */
+.wrap.wide header.top { position: relative; z-index: 30; }
+.bento > *:has(details.info[open]) { position: relative; z-index: 30; }
+
+/* --- Revisiones ---------------------------------------------------------- */
+
+/* Month, bar, score, marks. The bar is the score out of 10, so a column of
+   months reads as the trend without a chart. */
+ul.scores { list-style: none; margin: 0; padding: 0; }
+ul.scores > li {
+  display: grid; align-items: center; gap: 10px;
+  grid-template-columns: 64px minmax(40px, 1fr) 34px 52px;
+  padding: 5px 6px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  border-radius: var(--r-xs);
+}
+ul.scores > li:last-child { border-bottom: none; }
+ul.scores > li.on { background: var(--accent-soft); }
+ul.scores > li > .fig { text-align: right; }
+ul.scores .marks { display: flex; gap: 3px; justify-content: flex-end; }
+/* Low scores change colour and the number is printed beside the bar anyway, so
+   the colour is never the only channel. */
+.track .fill.mid { background: var(--warning); }
+.track .fill.low { background: var(--critical); }
+
+.bigscore { font-size: 44px; font-weight: 600; letter-spacing: -0.02em; line-height: 1; margin: 2px 0 14px; }
+.bigscore .dim { font-size: 18px; font-weight: 500; margin-left: 4px; }
+
+ul.components { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+ul.components .row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 13.5px; }
+ul.components .track { margin: 5px 0 4px; height: 6px; }
+
+section.panel h3.sub {
+  margin: 10px 0 2px;
+  font-family: var(--font-mono); font-size: 10px; font-weight: 500;
+  letter-spacing: .07em; text-transform: uppercase; color: var(--muted);
+}
+section.panel h3.sub:first-of-type { margin-top: 0; }
+
+pre.review-text {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+
+/* --- Annual matrix (D30) ------------------------------------------------- */
+
+/* Diverging, and relative to each row's own median (the template explains
+   why). Warm above the median, blue below: not the accent, which means "this is
+   the app", and not green, which the page uses for "good". Three steps a side;
+   the band around the median is not painted at all, so an ordinary month is
+   plain paper and the eye goes to the months that are not. */
+:root {
+  --heat-up-1:   rgba(191, 47, 47, 0.10);
+  --heat-up-2:   rgba(191, 47, 47, 0.22);
+  --heat-up-3:   rgba(191, 47, 47, 0.38);
+  --heat-down-1: rgba(40, 96, 200, 0.08);
+  --heat-down-2: rgba(40, 96, 200, 0.17);
+  --heat-down-3: rgba(40, 96, 200, 0.28);
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    --heat-up-1:   rgba(227, 93, 93, 0.14);
+    --heat-up-2:   rgba(227, 93, 93, 0.28);
+    --heat-up-3:   rgba(227, 93, 93, 0.46);
+    --heat-down-1: rgba(110, 160, 245, 0.12);
+    --heat-down-2: rgba(110, 160, 245, 0.23);
+    --heat-down-3: rgba(110, 160, 245, 0.36);
+  }
+}
+.hu1 { background: var(--heat-up-1); }
+.hu2 { background: var(--heat-up-2); }
+.hu3 { background: var(--heat-up-3); }
+.hd1 { background: var(--heat-down-1); }
+.hd2 { background: var(--heat-down-2); }
+.hd3 { background: var(--heat-down-3); }
+
+/* The matrix scrolls inside its own box. At 390px twelve months cannot fit and
+   should not try: the page stays put and the table moves under the category
+   column, which is pinned so a row never loses its name. */
+/* No negative margin to bleed the scroll to the panel edge: a sticky column
+   sticks at the scroll box's padding edge, and any padding there leaves a strip
+   through which the scrolled cells show beside the pinned names. */
+.mx-scroll {
+  overflow-x: auto;
+  padding-bottom: 4px;
+  overscroll-behavior-x: contain;
+}
+.mx {
+  --name-w: 176px;
+  min-width: max-content;
+  font-size: 12.5px;
+}
+/* Every row is its own grid on the same template, so a <details> can wrap a
+   parent and its children: a <table> cannot, and the brief says no JS. */
+.mx-row {
+  display: grid;
+  grid-template-columns: var(--name-w) repeat(var(--n), minmax(58px, 1fr)) 92px 64px 50px;
+  align-items: stretch;
+  border-bottom: 1px solid var(--border);
+}
+/* Block, not flex: text-overflow only ellipsizes a block's own inline text. */
+.mx-name {
+  position: sticky; left: 0; z-index: 1;
+  display: block;
+  padding: 5px 10px 5px 0;
+  background: var(--surface);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mx-cell {
+  display: flex; align-items: center; justify-content: flex-end;
+  padding: 5px 6px;
+  color: var(--ink);
+  text-decoration: none;
+  white-space: nowrap;
+}
+a.mx-cell:hover { outline: 1px solid var(--border-2); outline-offset: -1px; }
+a.mx-cell:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.mx-cell.zero { color: var(--muted); justify-content: center; }
+.mx-total { font-weight: 600; }
+.mx-n .dim { font-size: 10.5px; }
+.mx-n.rare { color: var(--warning); }
+
+.mx-head {
+  font-size: 11px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .04em;
+  border-bottom-color: var(--border-2);
+}
+.mx-head .mx-cell { justify-content: flex-end; }
+.mx-head .yy { color: var(--muted); opacity: .7; }
+
+details.mx-group > summary { list-style: none; cursor: pointer; }
+details.mx-group > summary::-webkit-details-marker { display: none; }
+details.mx-group > summary:hover .mx-name { color: var(--accent-ink); }
+.mx-name .caret {
+  display: inline-block; width: 10px; margin-right: 6px; color: var(--muted);
+  font-size: 10px; transition: transform .12s;
+}
+details.mx-group[open] > summary .caret { transform: rotate(90deg); }
+details.mx-group[open] > summary { border-bottom-color: var(--border-2); }
+.mx-child { font-size: 12px; color: var(--ink-2); }
+.mx-child .mx-name { padding-left: 16px; color: var(--ink-2); }
+.mx-child .mx-name.direct { font-style: italic; color: var(--muted); }
+.mx-child .mx-cell { color: var(--ink-2); }
+
+.mx-foot { border-top: 1px solid var(--border-2); border-bottom: 0; font-weight: 600; }
+.mx-income { border-bottom: 0; color: var(--ink-2); }
+.mx-income .mx-name { color: var(--ink-2); }
+
+.mx-legend { gap: 4px; align-items: center; }
+.mx-legend .sw {
+  display: inline-block; width: 12px; height: 10px; border-radius: 2px;
+  border: 1px solid var(--border);
+}
+
+@media (max-width: 560px) {
+  .mx { --name-w: 128px; }
+  .mx-legend { display: none; }
+}
+
+/* --- Escenarios (D31) ---------------------------------------------------- */
+
+ul.scen { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+ul.scen li { padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--r); }
+ul.scen li.on { border-color: var(--accent-edge); background: var(--accent-soft); }
+.scen-name { display: inline-flex; align-items: center; gap: 8px; color: var(--ink);
+             font-weight: 600; font-size: 14px; text-decoration: none; }
+.scen-name:hover { color: var(--accent-ink); }
+ul.scen dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 6px 0 0;
+             font-size: 12.5px; }
+ul.scen dt { color: var(--muted); }
+ul.scen dd { margin: 0; text-align: right; }
+.sw.s1, .sw.s2, .sw.s3, .sw.s4, .sw.s5 { display: inline-block; width: 12px; height: 3px; border-radius: 2px; }
+.sw.s1 { background: var(--series-1); }
+.sw.s2 { background: var(--series-2); }
+.sw.s3 { background: var(--series-3); }
+.sw.s4 { background: var(--series-4); }
+.sw.s5 { background: var(--series-5); }
+/* A table that scrolls inside its panel on a phone instead of moving the page. */
+.scroll-x { overflow-x: auto; overscroll-behavior-x: contain; }
+table.proj { font-size: 13px; }
+table.proj td.concept { min-width: 220px; }
+table.proj th, table.proj td { padding: 6px 8px; }
+ul.skipped { margin: 10px 0 0; padding-left: 18px; }
+pre.snippet {
+  padding: 12px 14px; overflow-x: auto;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r);
+  font: 12.5px/1.5 var(--font-mono);
+}
+.empty-help { max-width: 76ch; padding: 24px 0; }
+/* On a phone the closing balance is the column that matters, and with six
+   columns it was the one scrolled off screen. Opening is the previous row's
+   closing and the events are on the desktop table and in scenarios.yaml. */
+@media (max-width: 560px) {
+  table.proj .opt { display: none; }
+  table.proj th, table.proj td { padding: 6px 4px; }
+  /* The "< suelo" tag drops under its figure rather than widening the column:
+     it is the non-colour half of the warning and has to stay on screen. */
+  table.proj td .tag { display: block; width: max-content; margin: 2px 0 0 auto; }
+}

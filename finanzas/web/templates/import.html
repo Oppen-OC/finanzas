@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block title %}Importar{% endblock %}
+
+{% block body %}
+<header class="top"><h1>Importar extractos</h1></header>
+<p class="cover">Los ficheros se guardan en <code>data/inbox/</code> y no se borran nunca.
+  Un extracto ya importado se reconoce por su sha256 y no entra dos veces, así que subir
+  el mismo fichero otra vez no hace nada.</p>
+
+<form class="upload" action="/importar" method="post" enctype="multipart/form-data">
+  <label>Extractos (.xls de Santander, .xlsx de BBVA)
+    <input type="file" name="files" accept=".xls,.xlsx" multiple required>
+  </label>
+  <button type="submit">Importar</button>
+</form>
+
+{% if rejected %}
+<div class="banner"><span aria-hidden="true">▲</span><div>
+  <b>Sin tocar:</b>
+  {% for r in rejected %}<br>{{ r.file }} — {{ r.why }}{% endfor %}
+</div></div>
+{% endif %}
+
+{% if result %}
+  {% if not result.check.ok or result.failed %}
+  <div class="banner problem"><span aria-hidden="true">■</span><div>
+    <b>Mira el chequeo antes de fiarte de los números.</b> Una cadena de saldos rota o una
+    pata de transferencia sola significa que falta o sobra dinero en el libro, y todas las
+    métricas se calculan encima.
+  </div></div>
+  {% endif %}
+
+<section>
+  <h2>Importado</h2>
+  <div class="card">
+    <table>
+      <thead><tr><th>Fichero</th><th>Cuenta</th><th class="num">Filas</th>
+        <th class="num">Nuevas</th><th class="num">Duplicadas</th></tr></thead>
+      <tbody>
+      {% for r in result.imports %}
+        <tr>
+          <td>{{ r.file }}</td>
+          {% if r.status == "imported" %}
+          <td>{{ r.account }}</td>
+          <td class="num">{{ r.rows }}</td>
+          <td class="num">{{ r.get("inserted", 0) }}</td>
+          <td class="num dim">{{ r.get("duplicate", 0) }}</td>
+          {% elif r.status == "error" %}
+          <td colspan="4" class="neg">{{ r.error }}</td>
+          {% else %}
+          <td colspan="4" class="dim">{{ r.status }}</td>
+          {% endif %}
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% for s in saved if s.note %}<p class="dim">{{ s.file }}: {{ s.note }}</p>{% endfor %}
+  </div>
+</section>
+
+<section>
+  <h2>El libro</h2>
+  <div class="card">
+    <table>
+      <thead><tr><th>Cuenta</th><th class="num">Movimientos</th><th>Rango</th>
+        <th class="num">Importaciones</th><th class="num">Último saldo</th></tr></thead>
+      <tbody>
+      {% for a in result.check.accounts %}
+        <tr>
+          <td>{{ a.account }}</td>
+          <td class="num">{{ a.n }}</td>
+          <td class="nowrap">{{ a.first }} .. {{ a.last }}</td>
+          <td class="num dim">{{ a.n_imports }}</td>
+          <td class="num">{{ a.balance_cents | eur }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <h2>Chequeo</h2>
+  <p class="hint">Lo que haría mentir a cualquier número de más abajo: la cadena de saldos
+    rota (falta un periodo, o una fila contada dos veces), una transferencia entre cuentas
+    con una sola pata, y cualquier tira larga de dígitos que haya llegado a la base.</p>
+  <div class="card">
+    <ul class="checks">
+      {% for a in result.check.accounts %}
+      <li class="{{ 'ok' if not a.breaks else 'bad' }}">{{ a.account }}:
+        {{ a.breaks | length }} rotura(s) de cadena en {{ a.n }} movimientos
+        {% for before, after, diff in a.breaks %}
+        <div class="detail">entre {{ before["date_booked"] }} «{{ before["description"][:40] }}»
+          y {{ after["date_booked"] }} «{{ after["description"][:40] }}»:
+          {{ diff | eur }} EUR sin explicar</div>
+        {% endfor %}
+      </li>
+      {% endfor %}
+      {% set t = result.check.transfers %}
+      <li class="{{ 'ok' if not (t.unpaired_out or t.unpaired_in) else 'bad' }}">
+        Transferencias internas: {{ t.paired | length }} emparejadas,
+        {{ t.unpaired_out | length }} de salida y {{ t.unpaired_in | length }} de entrada solas,
+        {{ t.suspects | length }} pareja(s) espejo sin marcar como interna
+        {% for r in t.unpaired_out + t.unpaired_in %}
+        <div class="detail">pata suelta {{ r["date"] }} {{ r["account"] }}
+          {{ r["amount_cents"] | eur }} — {{ r["description"][:60] }}</div>
+        {% endfor %}
+      </li>
+      <li class="{{ 'ok' if not result.check.leaks else 'bad' }}">
+        Tiras largas de dígitos sin enmascarar: {{ result.check.leaks | length }}</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <h2>Categorización</h2>
+  <div class="card">
+    {% set c = result.categorize %}
+    {% if c.total %}
+    <p>{{ c.assigned }} por regla, {{ c.manual }} a mano,
+      {{ c.uncategorized }} sin categorizar de {{ c.total }}
+      ({{ (100 * c.uncategorized / c.total) | round(1) }}%).</p>
+    {% else %}
+    <p class="dim">El libro está vacío: no entró ningún movimiento.</p>
+    {% endif %}
+    {% if c.stale_manual %}
+    <!-- One line, not one paragraph each: a stale override is a hand-set category
+         doing nothing, which is worth naming but is not the ledger being wrong,
+         and fourteen red paragraphs bury the line underneath that is. -->
+    <p class="warn">manual.yaml: {{ c.stale_manual | length }} entrada(s) no corresponden a
+      ningún movimiento ({{ c.stale_manual | join(', ') }}). La categoría que fijaban no se
+      está aplicando.</p>
+    {% endif %}
+    {% if result.pending.n %}
+    <p>{{ result.pending.n }} movimiento(s) en {{ result.pending.groups }} descripción(es)
+      nuevas no los reconoce ninguna regla.
+      <a href="/movimientos?category={{ uncategorized_id }}">Míralos</a>, y ejecuta
+      <code>/finanzas</code> en Claude Code para ampliar <code>rules.yaml</code>.
+      La aplicación nunca llama a un modelo: nombra el hueco y para ahí.</p>
+    {% else %}
+    <p>Todo está categorizado.</p>
+    {% endif %}
+  </div>
+</section>
+{% endif %}
+{% endblock %}

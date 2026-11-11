@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}Objetivos{% endblock %}
+
+{% block body %}
+<header class="top">
+  <h1>Objetivos</h1>
+  <span class="cover">Se guardan en <code>{{ path }}</code>, no en la base de datos: la base
+    se reconstruye desde <code>data/inbox/</code> y un límite guardado ahí no sobreviviría.</span>
+</header>
+
+{% if error %}
+<div class="banner problem"><span aria-hidden="true">!</span><div>
+  <b>No se ha guardado.</b> {{ error }}
+</div></div>
+{% endif %}
+
+<section>
+  <h2>Límites mensuales</h2>
+  <p class="hint">Un cambio empieza a aplicar en {{ month }} y no reescribe los meses
+    anteriores: cada entrada lleva el mes desde el que vale. Un límite sobre una categoría
+    padre incluye a sus hijas.</p>
+  <div class="card">
+    {% if in_force %}
+    <table>
+      <thead><tr>
+        <th>Categoría</th><th class="num">Límite EUR/mes</th><th>Desde</th>
+        <th class="num">{{ month }}</th><th></th>
+      </tr></thead>
+      <tbody>
+      {% for cid, limit in in_force %}
+        {% set line = pace_by_category.get(cid) %}
+        <tr>
+          <td>{{ categories[cid].name }} <span class="dim">· {{ cid }}</span></td>
+          <td class="num">
+            <form method="post" action="/objetivos" class="inline">
+              <input type="hidden" name="do" value="set">
+              <input type="hidden" name="category" value="{{ cid }}">
+              <input class="amount" type="text" inputmode="decimal" name="monthly_eur"
+                     value="{{ limit.monthly_cents | amount }}" aria-label="Límite de {{ cid }}">
+              <button type="submit">Guardar</button>
+            </form>
+          </td>
+          <td class="nowrap">{{ limit.since }}
+            {% if goals.history(cid)|length > 1 %}
+            <span class="tag">{{ goals.history(cid)|length - 1 }} antes</span>{% endif %}</td>
+          <td class="num">{% if line %}{{ line.spent_cents | eur }}
+            <span class="dim">{{ "%.0f"|format(100 * line.share) }}%</span>{% endif %}</td>
+          <td>
+            <form method="post" action="/objetivos" class="inline">
+              <input type="hidden" name="do" value="unset">
+              <input type="hidden" name="category" value="{{ cid }}">
+              <button type="submit" class="quiet">Quitar</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="dim">Todavía no hay ningún límite. El panel enseña el ritmo del mes en cuanto
+      haya uno.</p>
+    {% endif %}
+
+    <form method="post" action="/objetivos" class="addlimit">
+      <input type="hidden" name="do" value="set">
+      <label>Categoría
+        <select name="category" required>
+          {% for parent, kids in category_options %}
+          {% if parent.type == 'expense' %}
+          <optgroup label="{{ parent.name }}">
+            <option value="{{ parent.id }}">Todo: {{ parent.name }}</option>
+            {% for k in kids %}<option value="{{ k.id }}">&nbsp;&nbsp;{{ k.name }}</option>{% endfor %}
+          </optgroup>
+          {% endif %}
+          {% endfor %}
+        </select>
+      </label>
+      <label>EUR al mes
+        <input type="text" inputmode="decimal" name="monthly_eur" placeholder="350" required>
+      </label>
+      <button type="submit">Añadir</button>
+    </form>
+  </div>
+</section>
+
+<section>
+  <h2>Saldo líquido</h2>
+  <p class="hint">El runway divide el saldo líquido entre el gasto mensual. Por defecto suma
+    el último saldo de cada cuenta ({{ pace_liquid | eur }} hoy); escribe una cifra aquí si
+    parte de ese dinero no está realmente disponible. Vacío vuelve a la suma.</p>
+  <div class="card">
+    <form method="post" action="/objetivos" class="addlimit">
+      <input type="hidden" name="do" value="liquid">
+      <label>EUR
+        <input type="text" inputmode="decimal" name="liquid_eur" placeholder="suma de las cuentas"
+               value="{% if goals.liquid_cents is not none %}{{ goals.liquid_cents | amount }}{% endif %}">
+      </label>
+      <button type="submit">Guardar</button>
+    </form>
+  </div>
+</section>
+{% endblock %}
